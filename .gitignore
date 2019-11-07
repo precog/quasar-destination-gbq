@@ -15,4 +15,8 @@ target/
 /scripts/publishAndTag
 /pubring.pgp.enc
 /scripts/readVersion
+/scripts/gbq-enc-private.key
+/scripts/keyfile.txt
 /secring.pgp.enc
+/core/src/test/resources/gbqAuthFile.json
+/keyfile
