@@ -1,6 +1,6 @@
 language: scala
-scala: 2.12.10
-jdk: openjdk8
+scala: 2.12.8
+jdk: oraclejdk8
 
 cache:
   directories:
@@ -48,3 +48,7 @@ branches:
   only:
     - master
     - /^backport.*$/
+
+before_cache:
+  - find "$HOME/.sbt/" -name '*.lock' -print0 | xargs -0 rm
+  - find "$HOME/.ivy2/" -name 'ivydata-*.properties' -print0 | xargs -0 rm
