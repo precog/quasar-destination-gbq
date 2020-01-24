@@ -28,7 +28,6 @@ env:
     - secure: "mL+jKuoWikjoOh0ix9O5IJ97v4lBDAUVYtaANocNMpHKyiUXhmqgQjF1C6xw8TFDx/GsYw7sP8jVS6ATbaUV1kXKWvpEW1/4iDnZsLnZTwQb5ZaVrDsA8Yn1J2lhPUtXbWgNz8K3tjXWYQHWTzoS4z2dTcdudj7mvl+CuiAm0rHwD3noCQTVGtFKvhOJMf59iBseitGWWDDP3mDhbFsC5mmDi4OU4rR+UITWrFV/1qgMeEm3CDpwiPpLbHqPc95qAkCLY0B8WYP5PUwTsYFCzRrKPOSOSONYP9wOmOZz/EQm5xGx+MQX9fg2Ke/J7COFQP5n+NIC7PuBV+hVZV0pKjpbDMPfCkJll/E+c6QP06kAZYZK9s23QwuwQnx91xzmx+zO6omAF2yO+QIyqzrchjCln+hGycTzOqRFzP0TqlQS0PnoARO38ChLHwHF3gHHPmQNNDiwPy6vpMr14aBD13KJzgkDF7UDit+qsA85uLAdYm4NzO/4Di+dclK/r936ZkiWcWh3RcfMewKIURG07/LPTCKPBBkreczLvyaiSqmVwU3BiWNuKLmRs1lG+YwSlJ7Yx14Zi1pRi0tF1bT/RH5RT//gMaUEH5P3SMfXev7PgqzOdXZ17kC4QKPiJnX6CbddunqEMxiUBtH52v/FRPdl2eNbhUn2oscaSTfj4IY="
 
 before_install:
-  - set -e
   - openssl aes-256-cbc -K $key_d499630087 -iv $iv_d499630087 -in "./scripts/gbq-enc-private.key.enc" -out "./scripts/gbq-enc-private.key" -d
   - |-
     if [ $(openssl sha1 "./scripts/gbq-enc-private.key" | egrep -o "[0-9a-f]+\$") != 965b2c53009fedf173b52ec16863ac9641e01ccf ]; then
@@ -40,7 +39,6 @@ before_install:
   - scripts/decrypt_gbq_auth.sh
 
 install:
-  - mkdir scripts
   - $SBT transferCommonResources
   - scripts/commonSetup
 

@@ -22,3 +22,5 @@ echo "decrypted $DEC_KEY_FILE"
 ls -al ${TTRAVIS_BUILD_DIR}/scripts
 
 openssl enc -verbose -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
+
+echo "decrypted gbq auth json file"
