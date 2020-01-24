@@ -9,8 +9,6 @@ DEC_KEY_FILE=${TRAVIS_BUILD_DIR}/scripts/keyfile.txt
 ENC_AUTH_FILE=${TRAVIS_BUILD_DIR}/scripts/gbqAuthFile.enc
 DEC_AUTH_FILE=$TRAVIS_BUILD_DIR/core/src/test/resources/gbqAuthFile.json
 
-openssl rsautl -decrypt -inkey ${PRIVATE_KEY} -in ${ENC_KEY_FILE} -out ${DEC_KEY_FILE} -pass env:${GBQ_DECRYPT_PASSWORD}
+openssl rsautl -decrypt -inkey ${PRIVATE_KEY} -in ${ENC_KEY_FILE} -out ${DEC_KEY_FILE} -passin pass:${GBQ_DECRYPT_PASSWORD}
 
 openssl enc -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
-
-
