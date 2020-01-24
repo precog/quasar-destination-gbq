@@ -43,8 +43,8 @@ install:
   - scripts/commonSetup
 
 script:
-    - ls -al
-    - mv ${TRAVIS_BUILD_DIR}/scripts/gbqAuthFile.json ${TRAVIS_BUILD_DIR}/core/src/test/resources/gbqAuthFile.json
+    - set -e
+
     - $SBT ++$TRAVIS_SCALA_VERSION test
 
     - |-
