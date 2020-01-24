@@ -3,6 +3,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+DATE=$(date)
+echo "current time is: ${DATE}"
+
 PRIVATE_KEY=${TRAVIS_BUILD_DIR}/scripts/gbq-enc-private.key
 ENC_KEY_FILE=${TRAVIS_BUILD_DIR}/scripts/keyfile.enc
 DEC_KEY_FILE=${TRAVIS_BUILD_DIR}/scripts/keyfile.txt
@@ -20,5 +23,3 @@ else
 fi
 
 openssl enc -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
-
-cat ${DEC_AUTH_FILE}
