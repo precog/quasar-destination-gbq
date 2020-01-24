@@ -7,7 +7,7 @@ PRIVATE_KEY=${TRAVIS_BUILD_DIR}/scripts/gbq-enc-private.key
 ENC_KEY_FILE=${TRAVIS_BUILD_DIR}/scripts/keyfile.enc
 DEC_KEY_FILE=${TRAVIS_BUILD_DIR}/scripts/keyfile.txt
 ENC_AUTH_FILE=${TRAVIS_BUILD_DIR}/scripts/gbqAuthFile.enc
-DEC_AUTH_FILE=${TRAVIS_BUILD_DIR}/core/src/test/resources/gbqAuthFile.json
+DEC_AUTH_FILE=${TRAVIS_BUILD_DIR}/scripts/gbqAuthFile.json
 
 ls -al ${TRAVIS_BUILD_DIR}/scripts
 echo $PRIVATE_KEY

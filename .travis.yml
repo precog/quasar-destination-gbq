@@ -44,7 +44,7 @@ install:
 
 script:
     - set -e
-
+    - mv scripts/gbqAuthFile.json core/src/test/resources/gbqAuthFile.json
     - $SBT ++$TRAVIS_SCALA_VERSION test
 
     - |-
