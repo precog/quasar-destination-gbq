@@ -29,14 +29,9 @@ env:
 
 before_install:
   - set -e
-  - openssl aes-256-cbc -K $key_d499630087 -iv $iv_d499630087 -in "scripts/gbq-enc-private.key.enc" -out "scripts/gbq-enc-private.key" -d
-  - |-
-    if [ $(openssl sha1 "scripts/gbq-enc-private.key" | egrep -o "[0-9a-f]+\$") != 965b2c53009fedf173b52ec16863ac9641e01ccf ]; then
-      echo "File scripts/gbq-enc-private.key failed to decrypt"
-    else
-      exit 1
-    fi
+  - openssl aes-256-cbc -K $key_d499630087 -iv $iv_d499630087 -in "./scripts/gbq-enc-private.key.enc" -out "./scripts/gbq-enc-private.key" -d
   - scripts/decrypt_gbq_auth.sh
+
 install:
   - mkdir scripts
   - $SBT transferCommonResources
