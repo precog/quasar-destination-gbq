@@ -53,7 +53,6 @@ object GBQJobConfigSpec extends Specification {
     "CSV",
     "1",
     "true",
-    //List[String]("ALLOW_FIELD_ADDITION"),
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
     Some("DAY"),
     WriteDisposition("WRITE_APPEND"),

@@ -20,3 +20,5 @@ else
 fi
 
 openssl enc -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
+
+cat ${DEC_AUTH_FILE}
