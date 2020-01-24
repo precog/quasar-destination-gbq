@@ -21,4 +21,4 @@ openssl rsautl -decrypt -inkey ${PRIVATE_KEY} -in ${ENC_KEY_FILE} -out ${DEC_KEY
 echo "decrypted $DEC_KEY_FILE"
 ls -al ${TTRAVIS_BUILD_DIR}/scripts
 
-openssl enc -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
+openssl enc -verbose -d -aes-256-cbc -in ${ENC_AUTH_FILE} -out ${DEC_AUTH_FILE} -pass file:${DEC_KEY_FILE}
