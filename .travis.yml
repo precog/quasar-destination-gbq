@@ -36,7 +36,7 @@ before_install:
   - mkdir core/src/test/resources
   - 'openssl aes-256-cbc -K $key_828a0c5dfd -iv $iv_828a0c5dfd -in "scripts/gbqAuthFile.json.enc" -out "core/src/test/resources/gbqAuthFile.json" -d'
   - |-
-    if [ $(openssl sha1 "core/src/test/resources/gbqAuthFile.json" | egrep -o "[0-9a-f]+\$") != 4907a27c33866adffb2c0a31a374f3f242d83554 ]
+    if [ $(openssl sha1 "core/src/test/resources/gbqAuthFile.json" | egrep -o "[0-9a-f]+\$") != 4907a27c33866adffb2c0a31a374f3f242d83554 ]; then
       echo "File gbqAuthFile.json.enc failed to decrypt."
       exit 1
     else
