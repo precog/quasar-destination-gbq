@@ -33,11 +33,11 @@ object GBQAccessToken {
   //TODO: should this return F[AccessToken]
   // or is token() below returning F[AccessToken] enough
   private def genAccessToken(auth: Array[Byte]): AccessToken = {
-      val authInputStream = new ByteArrayInputStream(auth) 
-      val credentials = GoogleCredentials
-        .fromStream(authInputStream)
-        .createScoped("https://www.googleapis.com/auth/bigquery")
-      (credentials.refreshAccessToken)
+    val authInputStream = new ByteArrayInputStream(auth) 
+    val credentials = GoogleCredentials
+      .fromStream(authInputStream)
+      .createScoped("https://www.googleapis.com/auth/bigquery")
+    credentials.refreshAccessToken
   }
 
   private val blocker: Blocker =

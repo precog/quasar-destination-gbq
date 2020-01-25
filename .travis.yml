@@ -20,22 +20,26 @@ env:
     - secure: "UVXyURJBAkO5pW5Y2FGFP3WPYYIiwU+5hUi6tGaL060qHNjcI/L0jXfKLlJL4kG6Y7TuphD2OhcvBNt8J/zaAWLMMbJbvxWHOlGEqtyMfPf/OjKLTxGi2xDve0+Z83k7Bt21EVaJgpdNN7mfroHongC6mQJQmp6GAGwT4aEYRD+NB12T+0/qOtItXBrdAN3CgGTyf3nDH3lMWki28lSDGOO8/vaTABzYJS/47hw0lVrGoZukDEiKXEMnhfpNUt7ROqtLeemtXbznvFXEc0psKiaPfQ1UBMkt0vWcReh5ScaujyNw3MMFICUMgIOmD6TVWDaWyjQ7P0B6qVkyM45jhtVwHSSwHn7PV3bnv6U/yt9dFqCJDkIKIzi4ZpJ1JbsmiJaCoIvTJQShz4uUcPMFaovgVEre/awCWOruhq3y+DIOlBk99ljjBpowIXO4hTgf5vAM85OgE2ngKIqyZuDqd2hgI3a/RipEtBDqAMvfNZ+hWUbloiabjNesuzO9bem4vFCTqAGXcN8AjirsMq2OMGTjiWuai25mRSWYeoUUfPL1ucHZnDy1LI/psykQzEJAc1hDjU6AXeyO6dZCZvvrOWZMJzBwAKR8JtEzpiyTvtlNjewxtpWEyFURciRm69//Gri15303nS+8WiOdJgvN0k2PPm2zYeI/WVeD2uAA/3Y="
     # DISCORD_WEBHOOK_TOKENS
     - secure: "RSFYHWmWpfKCtR1dkwwmJ6lLvWaKPPMXF0EKa66tfUEybe17U4QdMX9iGMUl1KCEOj/5Sd+h2W9j4iA5OVl+pXZqcLDGt9amorx7nabKw8tcwgDDqHax6U6I4ogny/talOkQjq8UFSqEm4V+JXuL5mr0os4DkAkjjUqyTteYaq7WSA9JUzpbX2P6YgYksF00R6XWEw5nVKGa9GdAzMZXjN0RutfeJ8hwt2wSkr/bLtVmC9Kl9adp+3grqiSn5Qq2ooPZsaIdzmVFHSzH/PxMA6h/UoRqOQhxhazS8i5xI7ij+mmxDzOrewCx/GgrUSXrY941ng2MPcMnO3A7RcYw0ic0UzABx9w6CM20057OEbJn2Y6TRITuGiP7Oy3FX3brjChV+0Ye3n3Q0NaWwXZnHyDo0k6Grb5fPYALwWqikF6EjWYJUa4N+SYotZfZGpkV6BFIRsLOlvg08FlnXEGPcYq0pS6YxViqiR/K5KU5rN4EkL5Ip8woYO5M8XIoJk7f18/GI9UWyrx6rsjms+/iIuuT9bZR/F4SN/YEJDoaECSeuY1t3FUud105eEiaXj9Lgb0j2dxZs8pqlqb2AxeMBRd/nQ9Frp4Y6TIdvvMiKV3HZe23Ja9q7YsmfAGTF7XM9w8nbpJZ3ZV/JsHU4G3kHJHYkQlxmvKZLCKZW+Gi3Ns="
-    # key for gbqAuthFile.json ($key_828a0c5dfd)
-    - secure: "iA/U94xG2tAgbdmBHgdq08f0CQ5zoiWWPuRM2krQrx3CaMI8Ldq6qUYlG5vN7o8wuAhLyzxGS5QTNSO66jVeW/1wXOVmuSHFx0UuOiKQWsLqUuSTNDsGZx6zmnnWe33fp4NOrNOBfujdHuweowAOI698Eoc5eCU7b9WhiW+2wTabosEA1ss9gdsNtW58ec6dIUyXq0+9/T/u6U9G6aZu/Q40sc9lb/EfingxHReu1wwVjvMZPpk5GmXFi5QRlu/2Qzf17AAZ/2f1N59UiBBM2K54pYZAPIqUjf/aF7uRzZHr4HomZxH+8Kl4bdPk4COHJDJWrL8ckOTSzE5a3bn6vgJeCxVyK/Nme+MbpaZGd0pqtXwMqArX5af8igFTcqRaWXnLb2UrCWefcMUOi24yqjJ8ShEI6ZIoy04uq12JXsTS3pr3vKCy98NuBevbNszCdZYmtPUUJuXzEzwYdjNiulfCZ0pV0gOAtU8YPd8iikcNaulsbEb18evZ0fNqKIq2R51MwQO6fBOSHVWMi9ER9x8etjnZaGl6RG6yc5T5MvLZZ1r28EvCkxLlO8cdc4/00kzvGXHrwGFEaoZxnnMo/B7LlgkGiopjmdU2BFaGUgvuYdoyC0Anb8dYG9r/9OQhRvciBV5aa9B/Ha6alqzutkTgrAZnaFaToIMeGnfMwbQ="
-    # initialization vector for gbqAuthFile.json ($iv_828a0c5dfd)
-    - secure: "VwMtVaqdKsEKg9hanwMOu7wi34yGD3Z74Z/YRqjmNE9bXXM45t8q+DLzZucXvJ1k3+DfkN0w730LlkHgOkVYXchK6zRntNDDnaz/rdimIje2NxGtPj+jy81gOrmZ8nHkNFUIuqWIQ+lRVv/78LEnRjHiIPUrxLBx31v0FofPyzAD0AHIxsV0F3x4595iBWPdGqXg4iGojWZ0e1U9Hu9GF4GRBBHErbu++TE4JmOcTXzsflKW7eNJ3r26VdA14hldzmyKPw5yvW+DQQj+uWi0X3PeKBddsrmm7qjICkp5dZhWM6Aha3mvtrGzNaTuj9AL7TlqY+YqmkfaRBr/ZsrzycwUQRywJi0qkbmPvlbzVM8bnUgPek13Mgm3ZObfR4RYIVobWtrvx6fxjmAyfsJ+VpYMPE6B2JzLd3v+VGIuPWIeDvkErp+p2wUR92i5hbcQgbcX+feOBkhjYReoZvG909nBWsc493L3YVMlrHLGvUZ7A1AsSgp45stUqg3mWRFgEhh9JPbizdeqNLVGj4HLm0Biy2XjvyoG+jbvC1kR073YJcmLJzkK/Y7h/bPmfYHZ6X+PTUIw6Fd1XxnD65qAzxWTN6IljCNg6L1CVKhUgT/vMdeZJ2cHw80p3gGzrSbpquIKB50NyXY7ea97p3VqSnaIOsoUJbhLEL0kEQV7kJk="
+    # key for gbqAuthFile.json ($key_275ab4e00a)
+    - secure: "nS0QasBvJEXivpuDKsM4q/2XrfJ7VOAKOiTtGRNpAjUfI+OoflIcjmi68gzmc2ps+Hss3l/90YJ1oKVTs2jKxwBb0KcxOPVvdWNDSrI1LVXhNiOoDEG3kCztReEf9Yu1HDO26XT9jrO7OkvmejYhsmRTojpJKFpFIMFydNE9wZxqB5ZEgoIpJpFfPizs7RMVZ1robslKtJXDwAjr2AwY0DMD245h3iblchgaPJ2EThiRSN3ybFwZ1/sab5rXxspmMwH3Fd/SbHbUYmrUr6hZ3WFbe7+4QEmpF+j7ItBVr2dunpoeDKHRoYemkug9lhBqXtNLGdpufENWEkG1640TOjKCvA/UWAmwsIpSbEFbHoSD46azmBIr1lljzOzxkWyc+AFMlyWlYKIDmwyl4joKqPdsJXZ5lMe6qYgnDg4cpn/z+vfrqUnSWcOaqCdO50u8N7hsBkBGgnFVnShmnJenzYY8HAgby+6bBT0JdAd78x3YdYiZM6Swy1FIRpb31tAOdgGJCduPNrg5EdX6epn/tcVkB1hND7jTRirMnYGmTp/BqcQt2wl9n04uE1swdEp3F4WgZDjLsgFw9gFw0APDNo5wpD/WOG/IjbzOUl3sBYEDinCRPDGF4X1ExZxvRu5gwd5UgXTIFYUjBEL2Cp72IkTSe3Z6grZbpoOU4pwpeQQ="
+    # initialization vector for gbqAuthFile.json ($iv_275ab4e00a)
+    - secure: "UzmJ9EyiOiW/pBRE0Mbe2Sh4hy9h4lHNlSosqTSTlr1FqGXoD+sZN2kEFoZKqOqL8plUAT2+xJiFG0T52ed5jLd5vp+RWmpHrQwWhq9iRYVXrcHOyAM/6cPZdXX5/wGrBekZBtC6q9U9ylrkPj24GSRqTSI0OkOvs7HJOJHUhKowDUlDrZXbOP5QiiEB95elmdE/MBPCAMtVbONrHh376LsWRu/BJaNRX+DxZJWks63MaNRJRdgYVOBZdORYKfroAqk5Xh9CaiA2gaEagbNvOXEIdfitrqt///VdiZYBZUZLAX+hh6jS9pla6js8ZUCBgVevXqMOK4TY3z62vKty197CFhhd0EB39TtDQcgp33z9ar6QKQQk12SejczluqMbILD9bPc4ROycEHiJHZkc/MZZHHoLqYc5oit0/Sh5H/bH2y64k3Pij2EAQxtYG/t3MZBh1bw0nJUarAAn1UgDZ49k9Fx3jh37uGSFZgV1BMO/tjQ8+S/7Te8zHg0rZaVSc3R724dipyTz+pllwuI1qT5O2BzvEc7rQr0xNdZS9gT3DAxMsaeCEMl/2s2lW1I4Cu04nz7mTVc8yCD44PEbmnEgIGjHzfM8wu9DJRFm5fGkF1h74XPtObdG/0CchhDuUWLtroGlJOAVOwJ6hHwCzpEC5v87iYf/6IIi3WrS4hA="
+
+before_install:
+
+
 
 before_install:
   - sudo service ntp stop
   - sudo ntpd -gq
   - sudo service ntp start
   - mkdir core/src/test/resources
-  - 'openssl aes-256-cbc -K $key_828a0c5dfd -iv $iv_828a0c5dfd -in "scripts/gbqAuthFile.json.enc" -out "core/src/test/resources/gbqAuthFile.json" -d'
+  - 'openssl aes-256-cbc -K $key_275ab4e00a -iv $iv_275ab4e00a -in "scripts/gbqAuthFile.json.enc" -out "core/src/test/resources/gbqAuthFile.json" -d'
   - |-
-    if [ $(openssl sha1 "core/src/test/resources/gbqAuthFile.json" | egrep -o "[0-9a-f]+\$") != 4907a27c33866adffb2c0a31a374f3f242d83554 ]; then
+    if [ $(openssl sha1 "core/src/test/resources/gbqAuthFile.json" | egrep -o "[0-9a-f]+\$") != ef2a9dd4591f0e20f1eb2aa4caf975a8bbd081f1 ]; then
       echo "File gbqAuthFile.json.enc failed to decrypt."
       exit 1
-    else
+    else 
       echo "File gbqAuthFile.json.enc successfully decrypted."
     fi
 
