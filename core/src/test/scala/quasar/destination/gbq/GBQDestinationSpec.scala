@@ -94,7 +94,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
       csv(cfg) { sink =>
           val r = sink.run(dst, List(TableColumn("a", ColumnType.String), TableColumn("b", ColumnType.Boolean)), data).compile.drain
           //TODO: give BigQuery to make it aware of newly pushed table, is there something else we can do?
-          java.lang.Thread.sleep(10000)
+          java.lang.Thread.sleep(20000)
           MRE.attempt(r).map(_ must beLike {
             case \/-(value) => value must_===(())
           })
