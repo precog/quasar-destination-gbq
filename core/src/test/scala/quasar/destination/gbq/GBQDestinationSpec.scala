@@ -74,6 +74,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   val authCfgPath = Paths.get(getClass.getClassLoader.getResource("gbqAuthFile.json").toURI)
   val authCfgString: String = new String(Files.readAllBytes(authCfgPath), UTF_8)
   val cfg = config(authCfg = Some(authCfgString), Some(testProject), Some(testDataset))
+  val resource = mkClient[IO]
 
   "csv link" should {
     "reject empty paths with NotAResource" >>* {
@@ -94,7 +95,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
       csv(cfg) { sink =>
           val r = sink.run(dst, List(TableColumn("a", ColumnType.String), TableColumn("b", ColumnType.Boolean)), data).compile.drain
           //TODO: give BigQuery to make it aware of newly pushed table, is there something else we can do?
-          java.lang.Thread.sleep(20000)
+          java.lang.Thread.sleep(5000)
           MRE.attempt(r).map(_ must beLike {
             case \/-(value) => value must_===(())
           })
@@ -102,7 +103,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     }
 
     "successfully check dataset was created" >>* {
-      val resource = mkClient[IO]
+      //val resource = mkClient[IO]
 
       for {
         accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
@@ -128,7 +129,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     }
 
     "successfully check uploaded table exists" >>* {
-      val resource = mkClient[IO]
+      //val resource = mkClient[IO]
       for {
         accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
@@ -138,7 +139,10 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
           s"https://content-bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables",
           Method.GET,
           `Content-Type`(MediaType.application.json))
-        resp <- resource.use(client => mkRequest(client, req))
+        resp <- resource.use(client => {
+          java.lang.Thread.sleep(5000)
+          mkRequest(client, req)
+        })
         containsTableName <- resp match {
           case Right(value) =>
             value.body.compile.toVector.map(v => {
@@ -153,7 +157,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     }
 
     "successfully check table contents" >>* {
-      val resource = mkClient[IO]
+      //val resource = mkClient[IO]
 
       for {
         accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
@@ -179,7 +183,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     }
 
     "successfully cleanup dataset and tables" >>* {
-      val resource = mkClient[IO]
+      //val resource = mkClient[IO]
 
       for {
         accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
