@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2020 Precog Data
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 package quasar.destination.gbq
 
-import slamdata.Predef._
-
 import argonaut._ , Argonaut._
+import scala.{List, Option}
+import scala.Predef.String
 
 final case class GBQDestinationTable(project: String, dataset: String, table: String)
   
@@ -33,7 +33,8 @@ final case class GBQJobConfig(
   timePartition: Option[String],
   writeDisposition: WriteDisposition,
   destinationTable: GBQDestinationTable,
-)
+  jobTimeoutMs: String,
+  jobType: String)
 
 object GBQJobConfig {
 
@@ -48,6 +49,8 @@ object GBQJobConfig {
         timePartition <- (load --\ "timePartition").as[Option[String]]
         writeDisposition <- (load --\ "writeDisposition").as(writeDispositionDecodeJson)
         destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
+        jobTimeoutMs <- (c --\ "jobTimeoutMs").as[String]
+        jobType <- (c --\ "jobType").as[String]
       } yield GBQJobConfig(
           sourceFormat,
           skipLeadingRows,
@@ -55,7 +58,9 @@ object GBQJobConfig {
           schema,
           timePartition,
           writeDisposition,
-          destinationTable)
+          destinationTable,
+          jobTimeoutMs,
+          jobType)
     })
   
   implicit val GBQJobConfigEncodeJson: EncodeJson[GBQJobConfig] =
@@ -71,7 +76,9 @@ object GBQJobConfig {
           "timePartition" := cfg.timePartition,
           "writeDisposition" := cfg.writeDisposition,
           "destinationTable" := cfg.destinationTable
-        )
+        ),
+        "jobTimeoutMs" := cfg.jobTimeoutMs,
+        "jobType" := cfg.jobType
       )
     ))
 

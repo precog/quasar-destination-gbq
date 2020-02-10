@@ -16,21 +16,17 @@
 
 package quasar.destination.gbq
 
-import argonaut._, Argonaut._
-import scala.Predef.String
+import cats.effect.{ConcurrentEffect, Resource}
 
-final case class GBQDatasetConfig(projectId: String, datasetId: String)
+import org.http4s.client.Client
 
-object GBQDatasetConfig {
-  implicit val GBQConfigCodecJson: CodecJson[GBQDatasetConfig] =
-    CodecJson(
-      (g: GBQDatasetConfig) => Json.obj(
-        "datasetReference" := Json.obj(
-          "projectId" := g.projectId,
-          "datasetId" := g.datasetId 
-        )),
-      c => for {
-        projectId <- (c --\ "projectId").as[String]
-        datasetId <- (c --\ "datasetId").as[String]
-      } yield GBQDatasetConfig(projectId, datasetId))
+import slamdata.Predef.SuppressWarnings
+
+import scala.Array
+import scala.concurrent.ExecutionContext
+
+// TODO: Remove the implicit EC if/when BlazeClientBuilder switches to ContextShift
+trait Http4sClientBuilder {
+  @SuppressWarnings(Array("org.wartremover.warts.ImplicitParameter"))
+  def apply[F[_]: ConcurrentEffect](implicit ec: ExecutionContext): Resource[F, Client[F]]
 }

@@ -18,5 +18,5 @@ target/
 /scripts/gbq-enc-private.key
 /scripts/keyfile.txt
 /secring.pgp.enc
-/core/src/test/resources/gbqAuthFile.json
 /keyfile
+/core/src/test/resources/precog-ci-275718-e913743ebfeb.json

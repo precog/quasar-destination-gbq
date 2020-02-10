@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2020 Precog Data
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,6 @@
 
 package quasar.destination.gbq
 
-import slamdata.Predef._
-
-import quasar.contrib.proxy.Search
-import quasar.api.destination.{Destination, DestinationType, DestinationError}
-import quasar.api.destination.DestinationError.InitializationError
-import quasar.connector.{DestinationModule, MonadResourceErr}
-
 import argonaut._, Argonaut._
 
 import cats.effect.{
@@ -30,19 +23,11 @@ import cats.effect.{
   ConcurrentEffect, 
   ContextShift, 
   Resource, 
-  Timer}
+  Timer
+}
 import cats.data.EitherT
 import cats.implicits._
 
-import eu.timepit.refined.auto._
-
-import java.net.{InetSocketAddress, ProxySelector}
-import java.net.Proxy
-import java.net.Proxy.{Type => ProxyType}
-
-import org.asynchttpclient.proxy.{ProxyServer, ProxyServerSelector}
-import org.asynchttpclient.{AsyncHttpClientConfig, DefaultAsyncHttpClientConfig}
-import org.asynchttpclient.uri.{Uri => AUri}
 import org.http4s.{
   AuthScheme,
   Credentials,
@@ -52,15 +37,21 @@ import org.http4s.{
   Uri}
 import org.http4s.headers.Authorization
 import org.http4s.client.Client
-import org.http4s.client.asynchttpclient.AsyncHttpClient
-import org.http4s.util.threads.threadFactory
-
 import org.slf4s.Logging
 
-import scala.util.Either
-import scala.collection.JavaConverters._
+import quasar.api.destination.{DestinationType, DestinationError}
+import quasar.api.destination.DestinationError.InitializationError
+import quasar.connector.destination.{Destination, DestinationModule}
+import quasar.connector.MonadResourceErr
 
-import scalaz.NonEmptyList
+import scala.Predef._
+import scala.{
+  StringContext,
+  Some,
+  Either,
+  Unit
+}
+import scala.concurrent.ExecutionContext
 
 object GBQDestinationModule extends DestinationModule with Logging {
 
@@ -68,113 +59,50 @@ object GBQDestinationModule extends DestinationModule with Logging {
 
   def destinationType = DestinationType("gbq", 1L)
 
-  def sanitizeDestinationConfig(config: Json): Json = {
+  def sanitizeDestinationConfig(config: Json) = {
     config.as[GBQConfig].toOption match {
-      case Some(c) => c.copy(authCfg = Redacted).asJson
-      case _ => jString(Redacted)
+      //TODO: maybe redact the entire service account key
+      case Some(c) => c.copy(authCfg = c.authCfg.copy(privateKey = Redacted)).asJson
+      case _ => Json.jEmptyObject
     }
   }
 
-  def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
-      config: Json)
-      : Resource[F,Either[InitializationError[Json],Destination[F]]] = {
-
-    val sanitizedConfig: Json = sanitizeDestinationConfig(config)
-    val configOrError = config.as[GBQConfig].toEither.leftMap {
-      case (err, _) =>
-        DestinationError.malformedConfiguration((destinationType, jString(Redacted), err))
-    }
-
-    val init = for {
-      cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
-      client <- EitherT(mkClient.map(_.asRight[InitializationError[Json]]))
-      _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
-    } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
-    
-    init.value
-  }
-
-  private def mkConfig[F[_]](proxySelector: ProxySelector): AsyncHttpClientConfig =
-    new DefaultAsyncHttpClientConfig.Builder()
-      .setMaxConnectionsPerHost(200)
-      .setMaxConnections(400)
-      .setRequestTimeout(Int.MaxValue)
-      .setReadTimeout(Int.MaxValue)
-      .setConnectTimeout(Int.MaxValue)
-      .setProxyServerSelector(ProxyVoleProxyServerSelector(proxySelector))
-      .setThreadFactory(threadFactory(name = { i =>
-        s"http4s-async-http-client-worker-${i}"
-      })).build
-
-  private def mkClient[F[_]: ConcurrentEffect]: Resource[F, Client[F]] = {
-    Resource.liftF(Search[F]).flatMap(selector =>
-      AsyncHttpClient.resource(mkConfig(selector)))
-  }
-
-  private def isLive[F[_]: Concurrent: ContextShift](
-      client: Client[F],
-      config: GBQConfig,
-      sanitizedConfig: Json)
-      : F[Either[InitializationError[Json], Unit]] = {
-
-    val req = for {
-      accessToken <- GBQAccessToken.token(config.authCfg.getBytes("UTF-8"))
-      auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
-      request = Request[F](
-        method = Method.GET,
-        uri = Uri.fromString(s"https://www.googleapis.com/bigquery/v2/projects/${config.project}/datasets").getOrElse(Uri())
-      ).withHeaders(auth)
-    } yield request
-
-    client.fetch(req) { resp =>
-      resp.status match {
-        case Status.Ok =>
-          ().asRight[InitializationError[Json]].pure[F]
-        case Status.NotFound =>
-          DestinationError.invalidConfiguration(
-            (destinationType, jString("Not Found"), 
-            NonEmptyList(sanitizedConfig.toString))).asLeft.pure[F]
-        case status =>
-          DestinationError.malformedConfiguration(
-            (destinationType, jString(status.reason), 
-            sanitizedConfig.toString)).asLeft.pure[F]
+  def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](config: Json)
+    : Resource[F,Either[InitializationError[Json], Destination[F]]] = {
+      val sanitizedConfig: Json = sanitizeDestinationConfig(config)
+      val configOrError = config.as[GBQConfig].toEither.leftMap {
+        case (err, _) =>
+          DestinationError.malformedConfiguration((destinationType, jString(Redacted), err))
       }
-    }
-  }
-
-//// proxy config
-
-  private def sortProxies(proxies: List[Proxy]): List[Proxy] = {
-    proxies.sortWith((l, r) => (l.`type`, r.`type`) match {
-      case (ProxyType.HTTP, ProxyType.DIRECT) => true
-      case (ProxyType.SOCKS, ProxyType.DIRECT) => true
-      case _ => false
-    })
-  }
-
-  private case class ProxyVoleProxyServerSelector(selector: ProxySelector)
-      extends ProxyServerSelector {
-    def select(uri: AUri): ProxyServer = {
-      ProxySelector.setDefault(selector) // NB: I don't think this is necessary
-
-      Option(selector)
-        .flatMap(s => Option(s.select(uri.toJavaNetURI)))
-        .flatMap(proxies0 => {
-          val proxies = proxies0.asScala.toList
-          log.debug(s"Found proxies: $proxies")
-
-          val sortedProxies = sortProxies(proxies)
-          log.debug(s"Prioritized proxies as: $sortedProxies")
-
-          sortedProxies.headOption
-        })
-        .flatMap(server => Option(server.address))
-        .map(_.asInstanceOf[InetSocketAddress]) // because Java
-        .map(uriToProxyServer(_))
-        .orNull // because Java x2
+      val init = for {
+        cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
+        client <- EitherT(AsyncHttpClientBuilder[F](ConcurrentEffect[F], ExecutionContext.fromExecutor(null)).map(_.asRight[InitializationError[Json]]))
+        _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
+      } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
+      init.value
     }
 
-  private def uriToProxyServer(u: InetSocketAddress): ProxyServer =
-    (new ProxyServer.Builder(u.getHostName, u.getPort)).build
+  private def isLive[F[_]: Concurrent: ContextShift](client: Client[F], config: GBQConfig, sanitizedConfig: Json)
+    : F[Either[InitializationError[Json], Unit]] = {
+      for {
+        accessToken <- GBQAccessToken.token(config.asJson.field("authCfg").get.toString.getBytes("UTF-8"))
+        auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
+        request <- Request[F](
+          method = Method.GET,
+          uri = Uri
+            .fromString(s"https://www.googleapis.com/bigquery/v2/projects/${config.authCfg.projectId}/datasets")
+            .getOrElse(Uri()))
+            .withHeaders(auth).pure[F]
+
+        resp <- client.run(request).use { resp =>
+          resp.status match {
+            case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
+            case _ => 
+              DestinationError.malformedConfiguration(
+                (destinationType, jString(resp.status.reason),
+                sanitizedConfig.toString)).asLeft[Unit].pure[F]
+          }
+        }
+      } yield resp
   }
 }

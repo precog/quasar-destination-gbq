@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2020 Precog Data
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,30 @@
 
 package quasar.destination.gbq
 
-import slamdata.Predef.{Array, Byte}
-
-import quasar.concurrent.NamedDaemonThreadFactory
-
-import com.google.auth.oauth2.{AccessToken, GoogleCredentials}
-
 import cats.effect._
+import cats.effect.{Blocker, Sync}
+
+import com.google.auth.oauth2.AccessToken
+import com.google.auth.oauth2.GoogleCredentials
 
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executors
 
+import quasar.concurrent.NamedDaemonThreadFactory
+
+import scala.{
+  Array,
+  Byte
+}
 import scala.concurrent.ExecutionContext
 
 object GBQAccessToken {
-  //TODO: should this return F[AccessToken]
-  // or is token() below returning F[AccessToken] enough
-  private def genAccessToken(auth: Array[Byte]): AccessToken = {
-    val authInputStream = new ByteArrayInputStream(auth) 
+  private def genAccessToken[F[_]: Sync](auth: Array[Byte]): F[AccessToken] = Sync[F] delay {
+    val authInputStream = new ByteArrayInputStream(auth)
     val credentials = GoogleCredentials
       .fromStream(authInputStream)
       .createScoped("https://www.googleapis.com/auth/bigquery")
+    credentials.refreshIfExpired
     credentials.refreshAccessToken
   }
 
@@ -45,5 +48,6 @@ object GBQAccessToken {
       ExecutionContext.fromExecutor(
         Executors.newCachedThreadPool(NamedDaemonThreadFactory("gbq-destination"))))
 
-  def token[F[_]: Sync: ContextShift](auth: Array[Byte]): F[AccessToken] = blocker.delay[F, AccessToken](genAccessToken(auth))
+  def token[F[_]: Sync: ContextShift](auth: Array[Byte]): F[AccessToken] =
+    blocker.blockOn[F, AccessToken](genAccessToken[F](auth))
 }

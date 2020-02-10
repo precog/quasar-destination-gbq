@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2020 Precog Data
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 package quasar.destination.gbq
 
-import slamdata.Predef._
-
 import argonaut.{Argonaut, DecodeJson, Json}, Argonaut._
 import org.specs2.mutable.Specification
+import scala.{Some, List}
 
 object GBQJobConfigSpec extends Specification {
   val decode = DecodeJson.of[GBQJobConfig].decodeJson(_)
@@ -56,13 +55,13 @@ object GBQJobConfigSpec extends Specification {
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
     Some("DAY"),
     WriteDisposition("WRITE_APPEND"),
-    GBQDestinationTable("myproject", "mydataset", "mytable"))
+    GBQDestinationTable("myproject", "mydataset", "mytable"), "100000", "LOAD")
 
   "decode json job config to GBQJobConfig" >> {
     decode(jsonJobCfg).toOption must beSome(testJobCfg)
   }
 
   "encode GBQJobConfig to json" >> {
-    testJobCfg.asJson === jsonJobCfg
+    testJobCfg.asJson must_=== jsonJobCfg
   }
 }

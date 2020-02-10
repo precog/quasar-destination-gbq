@@ -1,5 +1,5 @@
 /*
- * Copyright 2014–2019 SlamData Inc.
+ * Copyright 2020 Precog Data
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,72 +16,65 @@
 
 package quasar.destination.gbq
 
-import slamdata.Predef._
-
-import quasar.EffectfulQSpec
-import quasar.api.destination.{Destination, DestinationType, DestinationError}
-import quasar.api.destination.DestinationError.InitializationError
-import quasar.connector.ResourceError
-import quasar.contrib.scalaz.MonadError_
-
 import argonaut._, Argonaut._
 
 import cats.effect.{IO, Timer, ContextShift}
 
-import eu.timepit.refined.auto._
+import quasar.EffectfulQSpec
+import quasar.api.destination.DestinationError
+import quasar.api.destination.DestinationType
+import quasar.connector.destination.Destination
+import quasar.api.destination.DestinationError.InitializationError
+import quasar.connector.ResourceError
+import quasar.contrib.scalaz.MonadError_
 
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets.UTF_8
 
+import scala.{
+  Either,
+  Left,
+  Right
+}
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
+import scala.Predef.String
 
-   "initialization" should {
-     "fail with malformed config when config is not decodable" >>* {
+object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
+  val authCfgPath = Paths.get(getClass.getClassLoader.getResource("precog-ci-275718-e913743ebfeb.json").toURI)
+  val authCfgString = new String(Files.readAllBytes(authCfgPath), UTF_8)
+  val authCfgJson: Json = Parse.parse(authCfgString) match {
+    case Left(value) => Json.obj("malformed" := true)
+    case Right(value) => value
+  }
+
+  "initialization" should {
+    "fail with malformed config when config is not decodable" >>* {
       val cfg = Json("malformed" := true)
-      dest(cfg)(r => IO.pure(r match {
+      dest(cfg)(r => IO { r match {
         case Left(DestinationError.MalformedConfiguration(_, c, _)) =>
           c must_=== jString(GBQDestinationModule.Redacted)
         case _ => ko("Expected a malformed configuration")
-      }))
+      }})
     }
 
-    "fail with Not Found when checking for non existing project" >>* {
-      val authCfgPath = Paths.get(getClass.getClassLoader.getResource("gbqAuthFile.json").toURI)
-      val authCfgString: String = new String(Files.readAllBytes(authCfgPath), UTF_8)
-      val cfg = config(authCfg = Some(authCfgString), Some("bogusproject"), Some("mydataset"))
-
-      dest(cfg)(r => IO.pure(r match {
-        case Left(DestinationError.InvalidConfiguration(_, c, _) ) =>
-          c must_=== jString("Not Found")
-        case _ => ko("Expected a 404 failed request")
-      }))
-    }
-
-    "successfully check real project exists" >>* {
-      val authCfgPath = Paths.get(getClass.getClassLoader.getResource("gbqAuthFile.json").toURI)
-      val authCfgString: String = new String(Files.readAllBytes(authCfgPath), UTF_8)
-      val cfg = config(authCfg = Some(authCfgString), Some("travis-ci-reform-test-proj"), Some("mydataset"))
-
-      dest(cfg)(r => IO.pure { r match {
+    "successfully check project exists" >>* {
+      val cfg = config(authCfgJson, "mydataset")
+      dest(cfg)(r => IO { r match {
         case Right(a) => a.destinationType must_=== DestinationType("gbq", 1L)
         case _ => ko("Failed to correctly create Destination")
       }})
     }
-
-   }
+  }
 
   implicit val CS: ContextShift[IO] = IO.contextShift(global)
   implicit val TM: Timer[IO] = IO.timer(global)
   implicit val MRE: MonadError_[IO, ResourceError] = MonadError_.facet[IO](ResourceError.throwableP)
 
-  def config(authCfg: Option[String] = None, project: Option[String] = None, datasetId: Option[String] = None): Json =
+  def config(authCfg: Json, datasetId: String): Json =
     ("authCfg" := authCfg) ->:
-    ("project" := project) ->:
     ("datasetId" := datasetId) ->:
     jEmptyObject
-    
 
   def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] =
     GBQDestinationModule.destination[IO](cfg).use(f)
