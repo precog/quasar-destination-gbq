@@ -11,6 +11,7 @@ env:
   JDK: 1.8
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+  GITHUB_ACTOR: precog-bot
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -29,7 +30,7 @@ jobs:
         with:
           java-version: ${{ env.JDK }}
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Compile and test
         run: $SBT ++${{ matrix.scala }} ci
       - name: Upload working directory
@@ -51,7 +52,7 @@ jobs:
         with:
           name: working-dir
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v1
         with:
@@ -71,12 +72,7 @@ jobs:
       - name: Run common setup
         run: ./scripts/commonSetup
       - name: Publish and Tag
-        run: ./scripts/publishAndTag 'slamdata/quasar-destination-gbq'
-      - name: Bump Downstream
-        run: |
-          bumpInDownstream() { echo $1 > slamdata-destination-slamx-version; }
-          export -f bumpInDownstream
-          ./scripts/bumpDependentProject slamdata slamx bumpInDownstream
+        run: ./scripts/publishAndTag 'precog/quasar-destination-gbq'
 
   automerge:
     name: Auto Merge
@@ -101,7 +97,7 @@ jobs:
       - name: Create scripts dir
         run: mkdir ./scripts
       - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
+        run: git config github.actor precog-bot
       - name: Install common resources
         run: $SBT transferCommonResourcesa
       - name: Export common secrets
@@ -111,7 +107,7 @@ jobs:
       - name: Set env vars
         run: |
           echo ::set-env name=VERSIONS::$(git diff HEAD^1 | grep -e '^[-+][0-9]' | sed 's/^[+\-]//' | sed 's/\.[0-9]*$//' | uniq | wc -l)
-          echo ::set-env name=CLONE_DIR::$(mktemp -d "/tmp/slamdata-bump.XXXXXXXX")
+          echo ::set-env name=CLONE_DIR::$(mktemp -d "/tmp/precog-bump.XXXXXXXX")
           echo ::set-env name=IS_REVISION_LABEL::${{ contains(github.event.pull_request.labels.*.name, 'revision') }}
           echo ::set-env name=PR_NUMBER::$(echo "$GITHUB_REF" | cut -d'/' -f3)
       - name: Run automerge
