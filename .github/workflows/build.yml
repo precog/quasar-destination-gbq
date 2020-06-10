@@ -99,7 +99,7 @@ jobs:
       - name: Setup Git Actor
         run: git config github.actor precog-bot
       - name: Install common resources
-        run: $SBT transferCommonResourcesa
+        run: $SBT transferCommonResources
       - name: Export common secrets
         run: $SBT exportSecretsForActions
       - name: Run common setup
