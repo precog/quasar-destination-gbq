@@ -34,6 +34,7 @@ import fs2.{Stream, text}
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.Executors
+import java.util.UUID
 
 import org.http4s.argonaut.jsonEncoderOf
 import org.http4s.client.Client
@@ -85,7 +86,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   val testProject = "precog-ci-275718"
-  val testDataset = "mydataset"
+  val testDataset = "dataset_" + UUID.randomUUID().toString.replace("-", "_").toString
+  val tableName = "table_" + UUID.randomUUID().toString.replace("-", "_").toString
   val authCfgPath = Paths.get(getClass.getClassLoader.getResource("precog-ci-275718-e913743ebfeb.json").toURI)
   val authCfgString = new String(Files.readAllBytes(authCfgPath), UTF_8)
   val authCfgJson: Json = Parse.parse(authCfgString) match {
@@ -111,7 +113,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     "successfully upload table" >>* {
       csv(gbqCfg) { sink =>
           val data = Stream("col1,col2\r\nstuff,true\r\n").through(text.utf8Encode)
-          val path = ResourcePath.root() / ResourceName("foo") / ResourceName("bar.csv")
+          val path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
           val req = sink.consume(
             path,
             NonEmptyList.fromList(List(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))).get,
@@ -169,7 +171,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
           case Right(value) => value
         }
         result <- IO {
-           body.contains("foo") must beTrue
+           body.contains(tableName) must beTrue
         }
       } yield result
     }
