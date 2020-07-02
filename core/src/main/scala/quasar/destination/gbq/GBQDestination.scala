@@ -221,7 +221,7 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
     val destReq = Request[F](method = Method.PUT, uri = uploadLocation)
         .putHeaders(Header("Host", "www.googleapis.com"))
         .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
-        .withEntity(bytes).filterHeaders(h => h != Header("transfer-encoding", "chunked"))
+        .withEntity(bytes)
     val doUpload = client.run(destReq).use { resp =>
       resp.status match {
         case Status.Ok => ().pure[F]

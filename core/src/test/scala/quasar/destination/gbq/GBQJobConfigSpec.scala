@@ -37,16 +37,15 @@ object GBQJobConfigSpec extends Specification {
             ),
             Json.obj(
               "type" := jString("INT"),
-              "name" := jString("Id")
-            )
-          )
-        ),
+              "name" := jString("Id")))),
         "timePartition" := jString("DAY"),
         "writeDisposition" := jString("WRITE_APPEND"),
         "destinationTable" := Json.obj(
           "projectId" := jString("myproject"),
           "datasetId" := jString("mydataset"),
-          "tableId" := jString("mytable")))))
+          "tableId" := jString("mytable"))),
+      "jobTimeoutMs" := jString("21600000"),
+      "jobType" := jString("LOAD")))
 
   val testJobCfg = GBQJobConfig(
     "CSV",
@@ -55,7 +54,9 @@ object GBQJobConfigSpec extends Specification {
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
     Some("DAY"),
     WriteDisposition("WRITE_APPEND"),
-    GBQDestinationTable("myproject", "mydataset", "mytable"), "100000", "LOAD")
+    GBQDestinationTable("myproject", "mydataset", "mytable"),
+    "21600000",
+    "LOAD")
 
   "decode json job config to GBQJobConfig" >> {
     decode(jsonJobCfg).toOption must beSome(testJobCfg)

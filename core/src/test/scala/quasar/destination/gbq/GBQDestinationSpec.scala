@@ -100,10 +100,10 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   "csv link" should {
     "reject empty paths with NotAResource" >>* {
       csv(gbqCfg) { sink =>
-        val p = ResourcePath.root()
-        val r = sink.consume(p, NonEmptyList.one(Column("a", ColumnType.Boolean)), Stream.empty).compile.drain
-        MRE.attempt(r).map(_ must beLike {
-          case -\/(ResourceError.NotAResource(p2)) => p2 must_=== p
+        val path = ResourcePath.root()
+        val req = sink.consume(path, NonEmptyList.one(Column("a", ColumnType.Boolean)), Stream.empty).compile.drain
+        MRE.attempt(req).map(_ must beLike {
+          case -\/(ResourceError.NotAResource(p2)) => p2 must_=== path
         })
       }
     }
@@ -111,9 +111,9 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     "successfully upload table" >>* {
       csv(gbqCfg) { sink =>
           val data = Stream("col1,col2\r\nstuff,true\r\n").through(text.utf8Encode)
-          val dst = ResourcePath.root() / ResourceName("foo") / ResourceName("bar.csv")
+          val path = ResourcePath.root() / ResourceName("foo") / ResourceName("bar.csv")
           val req = sink.consume(
-            dst,
+            path,
             NonEmptyList.fromList(List(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))).get,
             data).compile.drain
 
@@ -133,7 +133,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets").getOrElse(Uri()))
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets")
+            .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
@@ -155,15 +156,14 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables").getOrElse(Uri()))
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables")
+            .getOrElse(Uri()))
             .withHeaders(auth)
-
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
           httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
             case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}")) 
         }}
-
         body = resp match {
           case Left(value) => value
           case Right(value) => value
@@ -180,18 +180,20 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables/foo/data").getOrElse(Uri()))
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables/foo/data")
+            .getOrElse(Uri()))
             .withHeaders(auth)
-        resp <- httpClient.run(req).use {
+        resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
+          httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
             case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}"))
-        }
+        }}
         body = resp match {
           case Left(value) => value
           case Right(value) => value
         }
         result <- IO {
-           body.contains("stuff") must beTrue
+          body.contains("stuff") must beTrue
         }
       } yield result
     }
@@ -202,7 +204,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.DELETE,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}?deleteContents=true").getOrElse(Uri()))
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}?deleteContents=true")
+            .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- httpClient.run(req).use {
             case Status.Successful(r) => IO { r.status }

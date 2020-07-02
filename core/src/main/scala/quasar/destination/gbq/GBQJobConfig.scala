@@ -49,8 +49,8 @@ object GBQJobConfig {
         timePartition <- (load --\ "timePartition").as[Option[String]]
         writeDisposition <- (load --\ "writeDisposition").as(writeDispositionDecodeJson)
         destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
-        jobTimeoutMs <- (c --\ "jobTimeoutMs").as[String]
-        jobType <- (c --\ "jobType").as[String]
+        jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[String]
+        jobType <- (c --\ "configuration" --\ "jobType").as[String]
       } yield GBQJobConfig(
           sourceFormat,
           skipLeadingRows,
@@ -71,16 +71,12 @@ object GBQJobConfig {
           "skipLeadingRows" := cfg.skipLeadingRows,
           "allowQuotedNewLines" := cfg.allowQuotedNewLines,
           "schema" := Json.obj(
-            "fields" := cfg.schema.toList
-          ),
+            "fields" := cfg.schema.toList),
           "timePartition" := cfg.timePartition,
           "writeDisposition" := cfg.writeDisposition,
-          "destinationTable" := cfg.destinationTable
-        ),
+          "destinationTable" := cfg.destinationTable),
         "jobTimeoutMs" := cfg.jobTimeoutMs,
-        "jobType" := cfg.jobType
-      )
-    ))
+        "jobType" := cfg.jobType)))
 
   implicit val schemaDecodeJson: DecodeJson[GBQSchema] =
     DecodeJson(c => {
