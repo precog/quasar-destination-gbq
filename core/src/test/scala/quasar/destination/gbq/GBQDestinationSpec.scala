@@ -182,7 +182,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables/foo/data")
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables/${tableName}/data")
             .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
