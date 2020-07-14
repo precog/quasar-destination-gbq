@@ -17,7 +17,9 @@
 package quasar.destination.gbq
 
 import argonaut.{Argonaut, DecodeJson, Json}, Argonaut._
+
 import org.specs2.mutable.Specification
+
 import scala.{Some, List}
 
 object GBQJobConfigSpec extends Specification {

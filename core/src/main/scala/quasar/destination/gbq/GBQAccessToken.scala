@@ -16,31 +16,36 @@
 
 package quasar.destination.gbq
 
+import quasar.concurrent.NamedDaemonThreadFactory
+
 import cats.effect._
+import cats.syntax.flatMap._
 import cats.effect.{Blocker, Sync}
 
-import com.google.auth.oauth2.AccessToken
-import com.google.auth.oauth2.GoogleCredentials
+import scala.{
+  Array,
+  Byte,
+}
+import scala.concurrent.ExecutionContext
 
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executors
 
-import quasar.concurrent.NamedDaemonThreadFactory
+import com.google.auth.oauth2.AccessToken
+import com.google.auth.oauth2.GoogleCredentials
 
-import scala.{
-  Array,
-  Byte
-}
-import scala.concurrent.ExecutionContext
 
 object GBQAccessToken {
-  private def genAccessToken[F[_]: Sync](auth: Array[Byte]): F[AccessToken] = Sync[F] delay {
-    val authInputStream = new ByteArrayInputStream(auth)
-    val credentials = GoogleCredentials
-      .fromStream(authInputStream)
-      .createScoped("https://www.googleapis.com/auth/bigquery")
-    credentials.refreshIfExpired
-    credentials.refreshAccessToken
+  private def genAccessToken[F[_]: Sync](auth: Array[Byte]): F[AccessToken] = {
+    val credentials = Sync[F] delay {
+      val authInputStream = new ByteArrayInputStream(auth)
+      GoogleCredentials
+        .fromStream(authInputStream)
+        .createScoped("https://www.googleapis.com/auth/bigquery")
+    }
+    credentials.flatMap(creds =>
+      Sync[F].delay(creds.refreshIfExpired()) >>
+        Sync[F].delay(creds.refreshAccessToken()))
   }
 
   private val blocker: Blocker =

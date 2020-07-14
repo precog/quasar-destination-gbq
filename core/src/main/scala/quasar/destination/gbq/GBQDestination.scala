@@ -16,16 +16,25 @@
 
 package quasar.destination.gbq
 
+import scala.Predef._
+
+import quasar.api.{Column, ColumnType}
+import quasar.api.destination.{DestinationError, DestinationType}
+import quasar.api.destination.DestinationError.InitializationError
+import quasar.api.resource.ResourceName
+import quasar.connector.{MonadResourceErr, ResourceError}
+import quasar.connector.destination.{Destination, LegacyDestination, ResultSink}
+import quasar.connector.render.RenderConfig
+import quasar.destination.gbq.GBQConfig._
+
 import argonaut._, Argonaut._
 
 import cats.ApplicativeError
 import cats.data.{ValidatedNel, NonEmptyList}
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 
 import fs2.Stream
-
-import java.lang.{RuntimeException, Throwable}
 
 import org.http4s.{
   AuthScheme,
@@ -38,22 +47,13 @@ import org.http4s.{
   Uri
 }
 import org.http4s.argonaut.jsonEncoderOf
-import org.http4s.client.Client
+import org.http4s.client._
 import org.http4s.Header
 import org.http4s.headers.{Authorization, `Content-Type`, Location}
 import org.slf4s.Logging
-import org.http4s.client._
 
-import quasar.api.{Column, ColumnType}
-import quasar.api.destination.{DestinationError, DestinationType}
-import quasar.api.destination.DestinationError.InitializationError
-import quasar.api.resource.ResourceName
-import quasar.connector.{MonadResourceErr, ResourceError}
-import quasar.connector.destination.{LegacyDestination, ResultSink}
-import quasar.connector.render.RenderConfig
-import quasar.destination.gbq.GBQConfig._
+import scalaz.{NonEmptyList => ZNEList}
 
-import scala.Predef._
 import scala.{
   Byte,
   Either,
@@ -63,7 +63,7 @@ import scala.{
 }
 import scala.util.{Left, Right}
 
-import scalaz.{NonEmptyList => ZNEList}
+import java.lang.{RuntimeException, Throwable}
 
 
 final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](
@@ -81,9 +81,7 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
     RenderConfig.Csv(includeHeader = false)
 
   private def csvSink: ResultSink[F, ColumnType.Scalar] =
-    ResultSink.create[F, ColumnType.Scalar](gbqRenderConfig) { 
-      case (path, columns, bytes) =>
-
+    ResultSink.create[F, ColumnType.Scalar](gbqRenderConfig) { case (path, columns, bytes) =>
       val tableNameF = path.uncons match {
         case Some((ResourceName(name), _)) => name.pure[F]
         case _ => MonadResourceErr[F].raiseError[String](
@@ -96,19 +94,17 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
         gbqJobConfig = formGBQJobConfig(schema, config, tableName)
         authCfgJson = config.authCfg.asJson
         accessToken <- Stream.eval(GBQAccessToken.token(authCfgJson.toString.getBytes("UTF-8")))
-        _ <- Stream.eval((mkDataset(client, accessToken.getTokenValue, config)))
+        _ <- Stream.eval(mkDataset(client, accessToken.getTokenValue, config))
         eitherloc <- Stream.eval(mkGbqJob(client, accessToken.getTokenValue, gbqJobConfig))
         _ <- Stream.eval(
           Sync[F].delay(
             log.info(s"(re)creating ${config.authCfg.projectId}.${config.datasetId}.${tableName} with schema ${columns.show}")))
         _ <- eitherloc match {
-            case Right(locationUri) => {
-              upload(client, bytes, locationUri)
-            }
-            case Left(e) =>
-              Stream.eval(Sync[F].delay(ApplicativeError[F, Throwable].raiseError(
-                new RuntimeException(s"No Location URL from returned from job: $e"))))
-          }
+          case Right(locationUri) =>
+            upload(client, bytes, locationUri)
+          case Left(e) => Stream.raiseError[F](
+            new RuntimeException(s"No Location URL from returned from job: $e"))
+        }
       } yield ()
   }
 
@@ -235,10 +231,8 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
 
 object GBQDestination {
   def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect, C](client: Client[F], config: GBQConfig, sanitizedConfig: Json)
-      : Resource[F, Either[InitializationError[C], LegacyDestination[F]]] = {
-        val gbqDest: Either[InitializationError[C], LegacyDestination[F]] = 
-          new GBQDestination[F](client, config, sanitizedConfig).asRight[InitializationError[C]]
-          
-        Resource.liftF(gbqDest.pure[F])
+      : F[Either[InitializationError[C], Destination[F]]] = {
+    val gbqDest: Either[InitializationError[C], Destination[F]] = new GBQDestination[F](client, config, sanitizedConfig).asRight[InitializationError[C]]
+    gbqDest.pure[F]
   }
 }

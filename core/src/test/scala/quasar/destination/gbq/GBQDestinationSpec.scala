@@ -16,78 +16,66 @@
 
 package quasar.destination.gbq
 
-//TODO: don't use this anymore
-//import slamdata.Predef._
+import slamdata.Predef.RuntimeException
 
-
-
-
-
-import argonaut._, Argonaut._
-
-import cats.data.NonEmptyList
-import cats.effect.{ConcurrentEffect, Blocker, IO, Resource, Timer}
-import cats.implicits._
-
-import fs2.{Stream, text}
-
-import java.nio.file.{Files, Paths}
-import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.Executors
-import java.util.UUID
-
-import org.http4s.argonaut.jsonEncoderOf
-import org.http4s.client.Client
-import org.http4s.{
-  AuthScheme, 
-  Credentials, 
-  EntityEncoder, 
-  Method, 
-  Request, 
-  Status,
-  Uri}
-import org.http4s.headers.Authorization
-import org.http4s.headers.`Content-Type`
-import org.http4s.client._
+import scala.Predef.String
 
 import quasar.api.{Column, ColumnType}
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.destination.{Destination, ResultSink}
 import quasar.connector.render.RenderConfig
 import quasar.api.resource.{ResourceName, ResourcePath}
-import quasar.api.destination.{DestinationError, DestinationType}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 import quasar.EffectfulQSpec
 
+import argonaut._, Argonaut._
+
+import cats.data.NonEmptyList
+import cats.effect.{Blocker, IO, Timer}
+
+import fs2.{Stream, text}
+
+import org.http4s.client.Client
+import org.http4s.{
+  AuthScheme, 
+  Credentials, 
+  Method, 
+  Request, 
+  Status,
+  Uri
+}
+import org.http4s.headers.Authorization
+import org.http4s.client._
+
+
+import scala.{Either, List, StringContext}
+import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
-
-import scala.{
-  Either,
-  List,
-  StringContext,
-}
-import scala.concurrent.duration._
-import scala.Predef.String
 import scala.util.Right
 import scala.util.Left
 
 import scalaz.{-\/,\/-}
 
-import slamdata.Predef.RuntimeException
+import java.nio.file.{Files, Paths}
+import java.nio.charset.StandardCharsets.UTF_8
+import java.util.concurrent.Executors
+import java.util.UUID
 
 import shims._
-
+import shapeless.PolyDefns.identity
 
 object GBQDestinationSpec extends EffectfulQSpec[IO] {
   sequential
 
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
 
-  val testProject = "precog-ci-275718"
+  val TEST_PROJECT = "precog-ci-275718"
+
   val testDataset = "dataset_" + UUID.randomUUID().toString.replace("-", "_").toString
   val tableName = "table_" + UUID.randomUUID().toString.replace("-", "_").toString
+
   val authCfgPath = Paths.get(getClass.getClassLoader.getResource("precog-ci-275718-e913743ebfeb.json").toURI)
   val authCfgString = new String(Files.readAllBytes(authCfgPath), UTF_8)
   val authCfgJson: Json = Parse.parse(authCfgString) match {
@@ -135,17 +123,14 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets")
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${TEST_PROJECT}/datasets")
             .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
             case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}")) 
         }
-        body = resp match {
-          case Left(value) => value
-          case Right(value) => value
-        }
+        body = resp.fold(identity, identity)
         result <- IO {
            body.contains(testDataset) must beTrue
         }
@@ -158,7 +143,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables")
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${TEST_PROJECT}/datasets/${testDataset}/tables")
             .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
@@ -166,10 +151,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
             case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}")) 
         }}
-        body = resp match {
-          case Left(value) => value
-          case Right(value) => value
-        }
+        body = resp.fold(identity, identity)
         result <- IO {
            body.contains(tableName) must beTrue
         }
@@ -182,7 +164,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}/tables/${tableName}/data")
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${TEST_PROJECT}/datasets/${testDataset}/tables/${tableName}/data")
             .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
@@ -190,10 +172,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
             case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}"))
         }}
-        body = resp match {
-          case Left(value) => value
-          case Right(value) => value
-        }
+        body = resp.fold(identity, identity)
         result <- IO {
           body.contains("stuff") must beTrue
         }
@@ -206,7 +185,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.DELETE,
-          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${testProject}/datasets/${testDataset}?deleteContents=true")
+          uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${TEST_PROJECT}/datasets/${testDataset}?deleteContents=true")
             .getOrElse(Uri()))
             .withHeaders(auth)
         resp <- httpClient.run(req).use {
@@ -245,42 +224,5 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     ("authCfg" := authCfg) ->:
     ("datasetId" := datasetId) ->:
     jEmptyObject
-
-  implicit def jobConfigEntityEncoder: EntityEncoder[IO, GBQJobConfig] = jsonEncoderOf[IO, GBQJobConfig]
-
-  def mkGeneralRequest[A](
-    bearerToken: Authorization,
-    data: A,
-    url: String,
-    reqMethod: Method,
-    contentType: `Content-Type`)(
-    implicit a: EntityEncoder[IO,A])
-    : Request[IO] = {
-      Request[IO](
-        method = reqMethod,
-        uri = Uri.fromString(url).getOrElse(Uri()))
-          .withHeaders(bearerToken)
-          .withContentType(contentType)
-          .withEntity(data)
-    }
-
-  val resource: Resource[IO, Client[IO]] = mkClient[IO]
-
-  def mkClient[F[_]: ConcurrentEffect]: Resource[F, Client[F]] = {
-      AsyncHttpClientBuilder[F](ConcurrentEffect[F], ExecutionContext.fromExecutor(null))
-  }
-
-  def mkRequest(client: Client[IO], req: Request[IO]) = {
-    client.run(req).use { resp =>
-      resp.status match {
-        case Status(_) =>
-          resp.asRight.pure[IO]
-        case _ =>
-          DestinationError.malformedConfiguration(
-            (DestinationType("gbq", 1L) , jString("Reason: " + resp.status.reason), 
-            "Response Code: " + resp.status.code)).asLeft.pure[IO]
-      }
-    }
-  }
 
 }

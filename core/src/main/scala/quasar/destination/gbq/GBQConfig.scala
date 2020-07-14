@@ -16,17 +16,15 @@
 
 package quasar.destination.gbq
 
+import scala.Predef.String
+
 import argonaut._, Argonaut._
 
 import cats.implicits._
 
-import java.net.{URI, URISyntaxException}
+import scala.{StringContext, Either}
 
-import scala.{
-  StringContext,
-  Either
-}
-import scala.Predef.String
+import java.net.{URI, URISyntaxException}
 
 final case class GBQConfig(authCfg: ServiceAccountConfig, datasetId: String)
 
@@ -66,16 +64,16 @@ object GBQConfig {
       privateKeyId,
       clientEmail,
       accountType) => ServiceAccountConfig(
-        tokenUri,
-        authProviderCertUrl,
-        privateKey,
-        clientId,
-        clientCertUrl,
-        authUri,
-        projectId,
-        privateKeyId,
-        clientEmail,
-        accountType),
+        tokenUri = tokenUri,
+        authProviderCertUrl = authProviderCertUrl,
+        privateKey = privateKey,
+        clientId = clientId,
+        clientCertUrl = clientCertUrl,
+        authUri = authUri,
+        projectId = projectId,
+        privateKeyId = privateKeyId,
+        clientEmail = clientEmail,
+        accountType = accountType),
       sac => 
         (sac.tokenUri, 
         sac.authProviderCertUrl,
@@ -99,13 +97,7 @@ object GBQConfig {
           "type")
 
   implicit val gbqConfigCodecJson: CodecJson[GBQConfig] =
-    CodecJson(
-      (g: GBQConfig) =>
-        ("authCfg" := g.authCfg) ->:
-        ("datasetId" := g.datasetId) ->:
-        jEmptyObject,
-      c => for {
-        authCfg <- (c --\ "authCfg").as[ServiceAccountConfig]
-        datasetId <- (c --\ "datasetId").as[String]
-      } yield GBQConfig(authCfg, datasetId))
+    casecodec2[ServiceAccountConfig, String, GBQConfig](
+      (authCfg, datasetId) => GBQConfig(authCfg, datasetId),
+      gbqc => (gbqc.authCfg, gbqc.datasetId).some)("authCfg", "datasetId")
 }

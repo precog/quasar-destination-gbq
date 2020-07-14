@@ -16,9 +16,10 @@
 
 package quasar.destination.gbq
 
-import argonaut._ , Argonaut._
-import scala.{List, Option}
 import scala.Predef.String
+import argonaut._ , Argonaut._
+import cats.implicits._
+import scala.{List, Option}
 
 final case class GBQDestinationTable(project: String, dataset: String, table: String)
   
@@ -78,19 +79,10 @@ object GBQJobConfig {
         "jobTimeoutMs" := cfg.jobTimeoutMs,
         "jobType" := cfg.jobType)))
 
-  implicit val schemaDecodeJson: DecodeJson[GBQSchema] =
-    DecodeJson(c => {
-      for {
-        typ <- (c --\ "type").as[String]
-        name <- (c --\ "name").as[String]
-      } yield GBQSchema(typ, name)
-    })
-
-  implicit val schemaEncodeJson: EncodeJson[GBQSchema] =
-    EncodeJson(schema => Json.obj(
-      "type" := schema.typ,
-      "name" := schema.name
-    ))
+  implicit val schemaCodecJson: CodecJson[GBQSchema] =
+    casecodec2[String, String, GBQSchema](
+      (typ, name) => GBQSchema(typ, name),
+      gbqs => (gbqs.typ, gbqs.name).some)("type", "name")
 
   implicit val writeDispositionDecodeJson: DecodeJson[WriteDisposition] = 
     DecodeJson {
@@ -107,17 +99,8 @@ object GBQJobConfig {
       case WriteDisposition(value) => jString(value)
     })
 
-  implicit val GBQDestinationTableDecodeJson: DecodeJson[GBQDestinationTable] =
-    DecodeJson(c => for {
-      projectId <- (c --\ "projectId").as[String]
-      datasetId <- (c --\ "datasetId").as[String]
-      tableId <- (c --\ "tableId").as[String] 
-    } yield GBQDestinationTable(projectId, datasetId, tableId))
-
-  implicit val GBQDestinationTableEncodeJson: EncodeJson[GBQDestinationTable] =
-    EncodeJson(dt => Json.obj(
-      "projectId" := dt.project,
-      "datasetId" := dt.dataset,
-      "tableId" := dt.table
-    ))
+  implicit val gbqDestinationTableCodecJson: CodecJson[GBQDestinationTable] =
+    casecodec3[String, String, String, GBQDestinationTable](
+      (project, dataset, table) => GBQDestinationTable(project, dataset, table),
+      gdt => (gdt.project, gdt.dataset, gdt.table).some)("projectId", "datasetId", "tableId")
 }

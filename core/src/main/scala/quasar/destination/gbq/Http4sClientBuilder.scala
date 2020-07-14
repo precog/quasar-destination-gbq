@@ -16,11 +16,11 @@
 
 package quasar.destination.gbq
 
+import slamdata.Predef.SuppressWarnings
+
 import cats.effect.{ConcurrentEffect, Resource}
 
 import org.http4s.client.Client
-
-import slamdata.Predef.SuppressWarnings
 
 import scala.Array
 import scala.concurrent.ExecutionContext

@@ -16,6 +16,13 @@
 
 package quasar.destination.gbq
 
+import scala.Predef._
+
+import quasar.api.destination.{DestinationType, DestinationError}
+import quasar.api.destination.DestinationError.InitializationError
+import quasar.connector.destination.{Destination, DestinationModule}
+import quasar.connector.MonadResourceErr
+
 import argonaut._, Argonaut._
 
 import cats.effect.{
@@ -34,17 +41,13 @@ import org.http4s.{
   Method,
   Request,
   Status,
-  Uri}
-import org.http4s.headers.Authorization
+  Uri
+}
 import org.http4s.client.Client
+import org.http4s.headers.Authorization
+
 import org.slf4s.Logging
 
-import quasar.api.destination.{DestinationType, DestinationError}
-import quasar.api.destination.DestinationError.InitializationError
-import quasar.connector.destination.{Destination, DestinationModule}
-import quasar.connector.MonadResourceErr
-
-import scala.Predef._
 import scala.{
   StringContext,
   Some,
@@ -52,6 +55,9 @@ import scala.{
   Unit
 }
 import scala.concurrent.ExecutionContext
+
+import java.util.concurrent.Executors
+import java.lang.Thread
 
 object GBQDestinationModule extends DestinationModule with Logging {
 
@@ -61,14 +67,13 @@ object GBQDestinationModule extends DestinationModule with Logging {
 
   def sanitizeDestinationConfig(config: Json) = {
     config.as[GBQConfig].toOption match {
-      //TODO: maybe redact the entire service account key
-      case Some(c) => c.copy(authCfg = c.authCfg.copy(privateKey = Redacted)).asJson
+      case Some(c) => Json("authCfg" := Redacted, "datasetId" := c.datasetId)
       case _ => Json.jEmptyObject
     }
   }
 
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](config: Json)
-    : Resource[F,Either[InitializationError[Json], Destination[F]]] = {
+    : Resource[F, Either[InitializationError[Json], Destination[F]]] = {
       val sanitizedConfig: Json = sanitizeDestinationConfig(config)
       val configOrError = config.as[GBQConfig].toEither.leftMap {
         case (err, _) =>
@@ -76,7 +81,12 @@ object GBQDestinationModule extends DestinationModule with Logging {
       }
       val init = for {
         cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
-        client <- EitherT(AsyncHttpClientBuilder[F](ConcurrentEffect[F], ExecutionContext.fromExecutor(null)).map(_.asRight[InitializationError[Json]]))
+        ec = Executors newCachedThreadPool { r =>
+          val t = new Thread(r)
+          t.setDaemon(true)
+          t
+        }
+        client <- EitherT(AsyncHttpClientBuilder[F](ConcurrentEffect[F], ExecutionContext.fromExecutor(ec)).map(_.asRight[InitializationError[Json]]))
         _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
       } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
       init.value

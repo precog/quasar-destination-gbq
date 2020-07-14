@@ -16,9 +16,7 @@
 
 package quasar.destination.gbq
 
-import argonaut._, Argonaut._
-
-import cats.effect.{IO, Timer, ContextShift}
+import scala.Predef.String
 
 import quasar.EffectfulQSpec
 import quasar.api.destination.DestinationError
@@ -28,20 +26,20 @@ import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 
+import argonaut._, Argonaut._
+
+import cats.effect.{IO, Timer, ContextShift}
+
+import scala.{Either, Left, Right}
+import scala.concurrent.ExecutionContext.Implicits.global
+
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets.UTF_8
 
-import scala.{
-  Either,
-  Left,
-  Right
-}
-import scala.concurrent.ExecutionContext.Implicits.global
-
-import scala.Predef.String
-
 object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
-  val authCfgPath = Paths.get(getClass.getClassLoader.getResource("precog-ci-275718-e913743ebfeb.json").toURI)
+  val AUTH_FILE = "precog-ci-275718-e913743ebfeb.json"
+
+  val authCfgPath = Paths.get(getClass.getClassLoader.getResource(AUTH_FILE).toURI)
   val authCfgString = new String(Files.readAllBytes(authCfgPath), UTF_8)
   val authCfgJson: Json = Parse.parse(authCfgString) match {
     case Left(value) => Json.obj("malformed" := true)

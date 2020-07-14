@@ -16,8 +16,9 @@
 
 package quasar.destination.gbq
 
-import argonaut._, Argonaut._
 import scala.Predef.String
+
+import argonaut._, Argonaut._
 
 final case class GBQDatasetConfig(projectId: String, datasetId: String)
 

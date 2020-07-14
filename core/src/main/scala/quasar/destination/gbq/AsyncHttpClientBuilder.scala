@@ -16,11 +16,10 @@
 
 package quasar.destination.gbq
 
-import cats.effect.{ConcurrentEffect, Resource}
+import quasar.concurrent.NamedDaemonThreadFactory
+import quasar.contrib.proxy.Search
 
-import java.net.{InetSocketAddress, ProxySelector}
-import java.net.Proxy
-import java.net.Proxy.{Type => ProxyType}
+import cats.effect.{ConcurrentEffect, Resource}
 
 import org.asynchttpclient.proxy.{ProxyServer, ProxyServerSelector}
 import org.asynchttpclient.uri.Uri
@@ -31,9 +30,6 @@ import org.http4s.client.asynchttpclient.AsyncHttpClient
 
 import org.slf4s.Logging
 
-import quasar.concurrent.NamedDaemonThreadFactory
-import quasar.contrib.proxy.Search
-
 import scala.{
   StringContext,
   Int,
@@ -42,6 +38,10 @@ import scala.{
 }
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
+
+import java.net.{InetSocketAddress, ProxySelector}
+import java.net.Proxy
+import java.net.Proxy.{Type => ProxyType}
 
 object AsyncHttpClientBuilder extends Http4sClientBuilder with Logging {
   def apply[F[_]: ConcurrentEffect](implicit ec: ExecutionContext): Resource[F, Client[F]] =
