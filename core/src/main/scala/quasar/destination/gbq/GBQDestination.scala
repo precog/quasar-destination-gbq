@@ -25,7 +25,6 @@ import quasar.api.resource.ResourceName
 import quasar.connector.{MonadResourceErr, ResourceError}
 import quasar.connector.destination.{Destination, LegacyDestination, ResultSink}
 import quasar.connector.render.RenderConfig
-import quasar.destination.gbq.GBQConfig._
 
 import argonaut._, Argonaut._
 
@@ -65,6 +64,10 @@ import scala.util.{Left, Right}
 
 import java.lang.{RuntimeException, Throwable}
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import scalaz.{NonEmptyList => ZNEList}
+
 
 final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](
     client: Client[F], 
@@ -92,18 +95,15 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
         tableName <- Stream.eval[F, String](tableNameF)
         schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
         gbqJobConfig = formGBQJobConfig(schema, config, tableName)
-        authCfgJson = config.authCfg.asJson
-        accessToken <- Stream.eval(GBQAccessToken.token(authCfgJson.toString.getBytes("UTF-8")))
+        accessToken <- Stream.eval(GBQAccessToken.token(config.serviceAccountAuthBytes))
         _ <- Stream.eval(mkDataset(client, accessToken.getTokenValue, config))
         eitherloc <- Stream.eval(mkGbqJob(client, accessToken.getTokenValue, gbqJobConfig))
         _ <- Stream.eval(
           Sync[F].delay(
             log.info(s"(re)creating ${config.authCfg.projectId}.${config.datasetId}.${tableName} with schema ${columns.show}")))
         _ <- eitherloc match {
-          case Right(locationUri) =>
-            upload(client, bytes, locationUri)
-          case Left(e) => Stream.raiseError[F](
-            new RuntimeException(s"No Location URL from returned from job: $e"))
+          case Right(locationUri) => upload(client, bytes, locationUri)
+          case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL from returned from job: $e"))
         }
       } yield ()
   }
@@ -121,10 +121,10 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
       "1",
       "true",
       schema.toList,
-      Some("DAY"), //TODO: make this configurable
-      WriteDisposition("WRITE_TRUNCATE"), //TODO: make this configurable
+      Some("DAY"),
+      WriteDisposition("WRITE_TRUNCATE"), // default is to drop and replace tables when pushing
       GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId), 
-      "21600000", //6hrs load job limit
+      "21600000", // 6hrs load job limit
       "LOAD")
 
   def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
@@ -161,60 +161,63 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
 
     val dCfg = GBQDatasetConfig(config.authCfg.projectId, config.datasetId)
     val bearerToken = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken))
-    val datasetReq = Request[F](
-      method = Method.POST,
-      uri = Uri.fromString(s"https://bigquery.googleapis.com/bigquery/v2/projects/${config.authCfg.projectId}/datasets")
-        .getOrElse(Uri()))
+    val project = URLEncoder.encode(config.authCfg.projectId, StandardCharsets.UTF_8.toString)
+    val datasetUrlString = s"https://bigquery.googleapis.com/bigquery/v2/projects/${project}/datasets"
+    val uri = StringToUri.get(datasetUrlString)
+
+    uri.fold(_.asLeft[Unit].pure[F], uri => {
+
+      val datasetReq = Request[F](Method.POST, uri)
         .withHeaders(bearerToken)
         .withContentType(`Content-Type`(MediaType.application.json))
         .withEntity(dCfg)
 
-      client.run(datasetReq).use { resp =>
-        resp.status match {
-          case Status.Ok =>
-            ().asRight[InitializationError[Json]].pure[F]
-          case Status.Conflict =>
-            DestinationError.invalidConfiguration(
-              (destinationType,
-              jString(s"Reason: gbq dataset ${resp.status.reason}"),
-              ZNEList(resp.status.reason))).asLeft.pure[F]
-          case status =>
-            DestinationError.malformedConfiguration(
-              (destinationType, jString("Reason: " + status.reason), 
-              sanitizedConfig.toString)).asLeft.pure[F]
+        client.run(datasetReq).use { resp =>
+          resp.status match {
+            case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
+            case Status.Conflict =>
+              DestinationError.invalidConfiguration(
+                (destinationType,
+                jString(s"Reason: ${resp.status.reason}"),
+                ZNEList(resp.status.reason))).asLeft[Unit].pure[F]
+            case status =>
+              DestinationError.malformedConfiguration(
+                (destinationType, jString(s"Reason: ${status.reason}"), 
+                sanitizedConfig.toString)).asLeft[Unit].pure[F]
+          }
         }
-      }
-    }
+    })
+  }
 
   private def mkGbqJob(client: Client[F], accessToken: String, jCfg: GBQJobConfig): F[Either[InitializationError[Json], Uri]] = {
     implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQJobConfig] = jsonEncoderOf[F, GBQJobConfig]
 
     val authToken = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken))
-    val jobReq = Request[F](
-      method = Method.POST,
-      uri = Uri
-        .fromString(s"https://bigquery.googleapis.com/upload/bigquery/v2/projects/${jCfg.destinationTable.project}/jobs?uploadType=resumable")
-        .getOrElse(Uri()))
-        .withHeaders(authToken)
-        .withContentType(`Content-Type`(MediaType.application.json))
-        .withEntity(jCfg)
+    val project = URLEncoder.encode(jCfg.destinationTable.project, StandardCharsets.UTF_8.toString)
+    val jobUrlString = s"https://bigquery.googleapis.com/upload/bigquery/v2/projects/${project}/jobs?uploadType=resumable"
+    val uri = StringToUri.get(jobUrlString)
 
-    client.run(jobReq).use { resp =>
-      resp.status match {
-        case Status.Ok => resp.headers match {
-          case Location(loc) =>
-            loc.uri.asRight.pure[F]
-        }
-        case _ =>
-          DestinationError.malformedConfiguration(
+    uri.fold(_.asLeft[Uri].pure[F], uri => {
+      val jobReq = Request[F](Method.POST,uri)
+          .withHeaders(authToken)
+          .withContentType(`Content-Type`(MediaType.application.json))
+          .withEntity(jCfg)
+
+      client.run(jobReq).use { resp => 
+        resp.status match {
+          case Status.Ok => resp.headers match {
+            case Location(loc) => loc.uri.asRight[InitializationError[Json]].pure[F]
+          }
+          case _ =>  DestinationError.malformedConfiguration(
             (destinationType, jString("Reason: " + resp.status.reason), 
-            sanitizedConfig.toString)).asLeft.pure[F]
+            sanitizedConfig.toString)).asLeft[Uri].pure[F]
+        }
       }
-    }
+    })
   }
 
   private def upload(client: Client[F], bytes: Stream[F, Byte], uploadLocation: Uri): Stream[F, Unit] = {
-    val destReq = Request[F](method = Method.PUT, uri = uploadLocation)
+    val destReq = Request[F](Method.PUT, uploadLocation)
         .putHeaders(Header("Host", "www.googleapis.com"))
         .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
         .withEntity(bytes)

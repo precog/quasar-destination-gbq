@@ -39,33 +39,8 @@ final case class GBQJobConfig(
 
 object GBQJobConfig {
 
-  implicit val GBQJobConfigDecodeJson: DecodeJson[GBQJobConfig] =
-    DecodeJson(c => {
-      val load = c --\ "configuration" --\ "load"
-      for {
-        sourceFormat <- (load --\ ("sourceFormat")).as[String]
-        skipLeadingRows <- (load --\ "skipLeadingRows").as[String]
-        allowQuotedNewLines <- (load --\ "allowQuotedNewLines").as[String]
-        schema <- (load --\ "schema" --\ "fields").as[List[GBQSchema]]
-        timePartition <- (load --\ "timePartition").as[Option[String]]
-        writeDisposition <- (load --\ "writeDisposition").as(writeDispositionDecodeJson)
-        destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
-        jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[String]
-        jobType <- (c --\ "configuration" --\ "jobType").as[String]
-      } yield GBQJobConfig(
-          sourceFormat,
-          skipLeadingRows,
-          allowQuotedNewLines,
-          schema,
-          timePartition,
-          writeDisposition,
-          destinationTable,
-          jobTimeoutMs,
-          jobType)
-    })
-  
-  implicit val GBQJobConfigEncodeJson: EncodeJson[GBQJobConfig] =
-    EncodeJson(cfg => Json.obj(
+  implicit val GBQJobConfigCodecJson: CodecJson[GBQJobConfig] = CodecJson(
+    { cfg => Json.obj(
       "configuration" := Json.obj(
         "load" := Json.obj(
           "sourceFormat" := cfg.sourceFormat,
@@ -77,27 +52,46 @@ object GBQJobConfig {
           "writeDisposition" := cfg.writeDisposition,
           "destinationTable" := cfg.destinationTable),
         "jobTimeoutMs" := cfg.jobTimeoutMs,
-        "jobType" := cfg.jobType)))
+        "jobType" := cfg.jobType))
+    }, { c => {
+      val load = c --\ "configuration" --\ "load"
+      for {
+        sourceFormat <- (load --\ ("sourceFormat")).as[String]
+        skipLeadingRows <- (load --\ "skipLeadingRows").as[String]
+        allowQuotedNewLines <- (load --\ "allowQuotedNewLines").as[String]
+        schema <- (load --\ "schema" --\ "fields").as[List[GBQSchema]]
+        timePartition <- (load --\ "timePartition").as[Option[String]]
+        writeDisposition <- (load --\ "writeDisposition").as(writeDispositionCodecJson)
+        destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
+        jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[String]
+        jobType <- (c --\ "configuration" --\ "jobType").as[String]
+      } yield GBQJobConfig(
+        sourceFormat,
+        skipLeadingRows,
+        allowQuotedNewLines,
+        schema,
+        timePartition,
+        writeDisposition,
+        destinationTable,
+        jobTimeoutMs,
+        jobType)
+    }})
 
   implicit val schemaCodecJson: CodecJson[GBQSchema] =
     casecodec2[String, String, GBQSchema](
       (typ, name) => GBQSchema(typ, name),
       gbqs => (gbqs.typ, gbqs.name).some)("type", "name")
 
-  implicit val writeDispositionDecodeJson: DecodeJson[WriteDisposition] = 
-    DecodeJson {
-      c => c.as[String].flatMap {
+  implicit val writeDispositionCodecJson: CodecJson[WriteDisposition] = CodecJson( 
+    { wd => wd match {
+        case WriteDisposition(value) => jString(value)
+      }
+    }, { c => c.as[String].flatMap {
         case wp @ "WRITE_APPEND" => DecodeResult.ok(WriteDisposition(wp))
         case wt @ "WRITE_TRUNCATE" => DecodeResult.ok(WriteDisposition(wt))
         case we @ "WRITE_EMPTY" => DecodeResult.ok(WriteDisposition(we))
         case other => DecodeResult.fail("Unrecognized Write Disposition: " + other, c.history)
-      }
-    }
-
-  implicit val writeDispositionEncodeJson: EncodeJson[WriteDisposition] =
-    EncodeJson(wd => wd match {
-      case WriteDisposition(value) => jString(value)
-    })
+    }})
 
   implicit val gbqDestinationTableCodecJson: CodecJson[GBQDestinationTable] =
     casecodec3[String, String, String, GBQDestinationTable](

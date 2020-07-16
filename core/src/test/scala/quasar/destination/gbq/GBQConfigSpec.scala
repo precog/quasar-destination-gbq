@@ -74,4 +74,9 @@ object GBQConfigSpec extends Specification {
   "encode GBQConfig to json" >> {
     testGbqCfg.asJson must_=== jsonGbqCfg
   }
+
+  "ensure GBQConfig will be readacted" >> {
+    GBQDestinationModule.sanitizeDestinationConfig(jsonGbqCfg) must_=== 
+      Json.obj("authCfg" := jString("<REDACTED>"), "datasetId" := jString(DATASET))
+  }
 }

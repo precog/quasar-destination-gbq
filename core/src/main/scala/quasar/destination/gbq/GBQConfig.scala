@@ -22,11 +22,16 @@ import argonaut._, Argonaut._
 
 import cats.implicits._
 
-import scala.{StringContext, Either}
+import scala.{Array, Byte, StringContext, Either}
 
 import java.net.{URI, URISyntaxException}
 
-final case class GBQConfig(authCfg: ServiceAccountConfig, datasetId: String)
+final case class GBQConfig(
+    authCfg: ServiceAccountConfig,
+    datasetId: String) {
+  import GBQConfig.serviceAccountConfigCodecJson
+  val serviceAccountAuthBytes: Array[Byte] = authCfg.asJson.toString.getBytes("UTF-8")
+}
 
 final case class ServiceAccountConfig(
   tokenUri: URI,

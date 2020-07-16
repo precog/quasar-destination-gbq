@@ -18,7 +18,7 @@ package quasar.destination.gbq
 
 import slamdata.Predef.RuntimeException
 
-import scala.Predef.String
+import scala.Predef.{String, println}
 
 import quasar.api.{Column, ColumnType}
 import quasar.api.destination.DestinationError.InitializationError
@@ -67,59 +67,84 @@ import shims._
 import shapeless.PolyDefns.identity
 
 object GBQDestinationSpec extends EffectfulQSpec[IO] {
-  sequential
+  import GBQConfig.serviceAccountConfigCodecJson
 
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
 
   val TEST_PROJECT = "precog-ci-275718"
+  val AUTH_FILE = "precog-ci-275718-e913743ebfeb.json"
+
+  //TODO: ask about this
+  val testDataset2 = for {
+    id <- IO(UUID.randomUUID)
+    datasetName = "dataset_" + id.toString.replace("-", "_").toString
+  } yield datasetName
+
+  val tableName2 = for {
+    id <- IO(UUID.randomUUID)
+    datasetName = "table_" + id.toString.replace("-", "_").toString
+  } yield datasetName
 
   val testDataset = "dataset_" + UUID.randomUUID().toString.replace("-", "_").toString
   val tableName = "table_" + UUID.randomUUID().toString.replace("-", "_").toString
 
-  val authCfgPath = Paths.get(getClass.getClassLoader.getResource("precog-ci-275718-e913743ebfeb.json").toURI)
+  val authCfgPath = Paths.get(getClass.getClassLoader.getResource(AUTH_FILE).toURI)
   val authCfgString = new String(Files.readAllBytes(authCfgPath), UTF_8)
   val authCfgJson: Json = Parse.parse(authCfgString) match {
     case Left(value) => Json.obj("malformed" := true)
     case Right(value) => value
   }
-  val gbqCfg = config(authCfgJson, testDataset)
+
+  println("authCfgJson: " + authCfgJson.toString)
+
+  val gbqConfig = testDataset2.map(td => GBQConfig(authCfgJson.as[ServiceAccountConfig].toOption.get, td))
+  val gbqCfg = gbqConfig.map(config => config.asJson)
   val blockingPool = Executors.newFixedThreadPool(5)
   val blocker = Blocker.liftExecutorService(blockingPool)
   val httpClient: Client[IO] = JavaNetClientBuilder[IO](blocker).create
 
   "csv link" should {
     "reject empty paths with NotAResource" >>* {
-      csv(gbqCfg) { sink =>
-        val path = ResourcePath.root()
-        val req = sink.consume(path, NonEmptyList.one(Column("a", ColumnType.Boolean)), Stream.empty).compile.drain
-        MRE.attempt(req).map(_ must beLike {
+      for {
+        gConfig <- gbqCfg
+        path = ResourcePath.root()
+        req = csv(gConfig) { sink =>
+          sink.consume(path, NonEmptyList.one(Column("a", ColumnType.Boolean)), Stream.empty).compile.drain
+        }
+        test <- MRE.attempt(req).map(_ must beLike {
           case -\/(ResourceError.NotAResource(p2)) => p2 must_=== path
         })
-      }
-    }
-
-    "successfully upload table" >>* {
-      csv(gbqCfg) { sink =>
-          val data = Stream("col1,col2\r\nstuff,true\r\n").through(text.utf8Encode)
-          val path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
-          val req = sink.consume(
-            path,
-            NonEmptyList.fromList(List(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))).get,
-            data).compile.drain
-
-          Timer[IO].sleep(5.seconds).flatMap { _ =>
-            MRE.attempt(req).map(_ must beLike {
-              case \/-(value) => value must_===(())
-            })
-          }
-      }
+      } yield test
     }
   }
 
   "bigquery upload" should {
+    sequential
+
+    "successfully upload table" >>* {
+      val data = Stream("col1,col2\r\nstuff,true\r\n").through(text.utf8Encode)
+      val path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
+      for {
+        gConfig <- gbqCfg
+        req =  csv(gConfig) { sink =>
+          sink.consume(
+            path,
+            NonEmptyList.fromList(List(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))).get,
+            data)
+          .compile.drain
+        }
+        test <- Timer[IO].sleep(5.seconds).flatMap { _ =>
+          MRE.attempt(req).map(_ must beLike {
+            case \/-(value) => value must_===(())
+          })
+        }
+      } yield test
+    }
+
     "successfully check dataset was created" >>* {
       for {
-        accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
+        gConfig <- gbqConfig
+        accessToken <- GBQAccessToken.token[IO](gConfig.serviceAccountAuthBytes)
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
@@ -139,7 +164,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 
     "successfully check uploaded table exists" >>* {
       for {
-        accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
+        gConfig <- gbqConfig
+        accessToken <- GBQAccessToken.token[IO](gConfig.serviceAccountAuthBytes)
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
@@ -160,7 +186,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 
     "successfully check table contents" >>* {
       for {
-        accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
+        gConfig <- gbqConfig
+        accessToken <- GBQAccessToken.token[IO](gConfig.serviceAccountAuthBytes)
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.GET,
@@ -181,7 +208,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 
     "successfully cleanup dataset and tables" >>* {
       for {
-        accessToken <- GBQAccessToken.token[IO](authCfgString.getBytes("UTF-8"))
+        gConfig <- gbqConfig
+        accessToken <- GBQAccessToken.token[IO](gConfig.serviceAccountAuthBytes)
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
         req = Request[IO](
           method = Method.DELETE,
@@ -219,10 +247,5 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 
   def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] =
     GBQDestinationModule.destination[IO](cfg).use(f)
-
-  def config(authCfg: Json, datasetId: String): Json =
-    ("authCfg" := authCfg) ->:
-    ("datasetId" := datasetId) ->:
-    jEmptyObject
 
 }

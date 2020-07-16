@@ -40,8 +40,7 @@ import org.http4s.{
   Credentials,
   Method,
   Request,
-  Status,
-  Uri
+  Status
 }
 import org.http4s.client.Client
 import org.http4s.headers.Authorization
@@ -58,6 +57,8 @@ import scala.concurrent.ExecutionContext
 
 import java.util.concurrent.Executors
 import java.lang.Thread
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 object GBQDestinationModule extends DestinationModule with Logging {
 
@@ -94,25 +95,24 @@ object GBQDestinationModule extends DestinationModule with Logging {
 
   private def isLive[F[_]: Concurrent: ContextShift](client: Client[F], config: GBQConfig, sanitizedConfig: Json)
     : F[Either[InitializationError[Json], Unit]] = {
+      val project = URLEncoder.encode(config.authCfg.projectId, StandardCharsets.UTF_8.toString)
+      val datasetsUrlString = s"https://www.googleapis.com/bigquery/v2/projects/${project}/datasets"
+      val uriEither = StringToUri.get(datasetsUrlString)
       for {
-        accessToken <- GBQAccessToken.token(config.asJson.field("authCfg").get.toString.getBytes("UTF-8"))
+        accessToken <- GBQAccessToken.token(config.serviceAccountAuthBytes)
         auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
-        request <- Request[F](
-          method = Method.GET,
-          uri = Uri
-            .fromString(s"https://www.googleapis.com/bigquery/v2/projects/${config.authCfg.projectId}/datasets")
-            .getOrElse(Uri()))
-            .withHeaders(auth).pure[F]
-
-        resp <- client.run(request).use { resp =>
-          resp.status match {
-            case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
-            case _ => 
-              DestinationError.malformedConfiguration(
-                (destinationType, jString(resp.status.reason),
+        response <- uriEither.fold(_.asLeft[Unit].pure[F], uri => {
+          val request = Request[F](Method.GET, uri).withHeaders(auth)
+          client.run(request).use { resp =>
+            resp.status match {
+              case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
+              case _ => DestinationError.malformedConfiguration((
+                destinationType, 
+                jString(resp.status.reason),
                 sanitizedConfig.toString)).asLeft[Unit].pure[F]
+            }
           }
-        }
-      } yield resp
+        })
+      } yield response
   }
 }

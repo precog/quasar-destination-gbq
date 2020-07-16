@@ -16,7 +16,7 @@
 
 package quasar.destination.gbq
 
-import scala.Predef.String
+import scala.Predef.{String, ???}
 
 import quasar.EffectfulQSpec
 import quasar.api.destination.DestinationError
@@ -60,7 +60,8 @@ object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
       val cfg = config(authCfgJson, "mydataset")
       dest(cfg)(r => IO { r match {
         case Right(a) => a.destinationType must_=== DestinationType("gbq", 1L)
-        case _ => ko("Failed to correctly create Destination")
+        case Left(DestinationError.MalformedConfiguration(_, c, _)) => c must_=== jString("Not Found")
+        case _ => ko("Expeted successful project check")
       }})
     }
   }
