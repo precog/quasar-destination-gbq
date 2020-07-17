@@ -51,7 +51,7 @@ object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
       val cfg = Json("malformed" := true)
       dest(cfg)(r => IO { r must beLike {
         case Left(DestinationError.MalformedConfiguration(_, c, _)) =>
-          c must_=== jString(GBQDestinationModule.Redacted)
+          c must_=== jString(GBQConfig.Redacted)
       }})
     }
 

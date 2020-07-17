@@ -46,6 +46,8 @@ final case class ServiceAccountConfig(
   accountType: String)
 
 object GBQConfig {
+  val Redacted: String = "<REDACTED>"
+
   implicit val uriCodecJson: CodecJson[URI] =
     CodecJson(
       uri => Json.jString(uri.toString),

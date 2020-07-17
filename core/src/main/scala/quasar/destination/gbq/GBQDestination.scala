@@ -29,8 +29,8 @@ import quasar.connector.render.RenderConfig
 import argonaut._, Argonaut._
 
 import cats.ApplicativeError
-import cats.data.{ValidatedNel, NonEmptyList}
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Sync}
+import cats.data.{EitherT, ValidatedNel, NonEmptyList}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
 import cats.implicits._
 
 import fs2.Stream
@@ -69,18 +69,18 @@ import java.nio.charset.StandardCharsets
 import scalaz.{NonEmptyList => ZNEList}
 
 
-final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](
-    client: Client[F], 
+class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect] private (
+    client: Client[F],
     config: GBQConfig,
     sanitizedConfig: Json) extends LegacyDestination[F] with Logging {
 
   def destinationType: DestinationType =
      GBQDestinationModule.destinationType
 
-  def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] = 
+  def sinks: NonEmptyList[ResultSink[F, ColumnType.Scalar]] =
     NonEmptyList.one(csvSink)
 
-  val gbqRenderConfig: RenderConfig.Csv = 
+  val gbqRenderConfig: RenderConfig.Csv =
     RenderConfig.Csv(includeHeader = false)
 
   private def csvSink: ResultSink[F, ColumnType.Scalar] =
@@ -123,7 +123,7 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
       schema.toList,
       Some("DAY"),
       WriteDisposition("WRITE_TRUNCATE"), // default is to drop and replace tables when pushing
-      GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId), 
+      GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId),
       "21600000", // 6hrs load job limit
       "LOAD")
 
@@ -156,7 +156,7 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
       }
 
   private def mkDataset(client: Client[F], accessToken: String, config: GBQConfig): F[Either[InitializationError[Json], Unit]] = {
-    implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQDatasetConfig] = 
+    implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQDatasetConfig] =
       jsonEncoderOf[F, GBQDatasetConfig]
 
     val dCfg = GBQDatasetConfig(config.authCfg.projectId, config.datasetId)
@@ -182,7 +182,7 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
                 ZNEList(resp.status.reason))).asLeft[Unit].pure[F]
             case status =>
               DestinationError.malformedConfiguration(
-                (destinationType, jString(s"Reason: ${status.reason}"), 
+                (destinationType, jString(s"Reason: ${status.reason}"),
                 sanitizedConfig.toString)).asLeft[Unit].pure[F]
           }
         }
@@ -203,13 +203,13 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
           .withContentType(`Content-Type`(MediaType.application.json))
           .withEntity(jCfg)
 
-      client.run(jobReq).use { resp => 
+      client.run(jobReq).use { resp =>
         resp.status match {
           case Status.Ok => resp.headers match {
             case Location(loc) => loc.uri.asRight[InitializationError[Json]].pure[F]
           }
           case _ =>  DestinationError.malformedConfiguration(
-            (destinationType, jString("Reason: " + resp.status.reason), 
+            (destinationType, jString("Reason: " + resp.status.reason),
             sanitizedConfig.toString)).asLeft[Uri].pure[F]
         }
       }
@@ -233,9 +233,49 @@ final class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Con
 }
 
 object GBQDestination {
-  def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect, C](client: Client[F], config: GBQConfig, sanitizedConfig: Json)
-      : F[Either[InitializationError[C], Destination[F]]] = {
-    val gbqDest: Either[InitializationError[C], Destination[F]] = new GBQDestination[F](client, config, sanitizedConfig).asRight[InitializationError[C]]
-    gbqDest.pure[F]
+  def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](config: Json)
+      : Resource[F, Either[InitializationError[Json], Destination[F]]] = {
+
+    val sanitizedConfig: Json = GBQDestinationModule.sanitizeDestinationConfig(config)
+
+    val configOrError = config.as[GBQConfig].toEither.leftMap {
+      case (err, _) =>
+        DestinationError.malformedConfiguration(
+          (GBQDestinationModule.destinationType, jString(GBQConfig.Redacted), err))
+    }
+
+    val init = for {
+      cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
+      client <- EitherT(AsyncHttpClientBuilder[F].map(_.asRight[InitializationError[Json]]))
+      _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
+    } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
+
+    init.value
+  }
+
+  private def isLive[F[_]: Concurrent: ContextShift](
+      client: Client[F],
+      config: GBQConfig,
+      sanitizedConfig: Json)
+      : F[Either[InitializationError[Json], Unit]] = {
+    val project = URLEncoder.encode(config.authCfg.projectId, StandardCharsets.UTF_8.toString)
+    val datasetsUrlString = s"https://www.googleapis.com/bigquery/v2/projects/${project}/datasets"
+    val uriEither = StringToUri.get(datasetsUrlString)
+    for {
+      accessToken <- GBQAccessToken.token(config.serviceAccountAuthBytes)
+      auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
+      response <- uriEither.fold(_.asLeft[Unit].pure[F], uri => {
+        val request = Request[F](Method.GET, uri).withHeaders(auth)
+        client.run(request).use { resp =>
+          resp.status match {
+            case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
+            case _ => DestinationError.malformedConfiguration((
+              GBQDestinationModule.destinationType,
+              jString(resp.status.reason),
+              sanitizedConfig.toString)).asLeft[Unit].pure[F]
+          }
+        }
+      })
+    } yield response
   }
 }
