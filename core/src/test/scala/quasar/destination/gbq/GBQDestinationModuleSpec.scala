@@ -16,7 +16,7 @@
 
 package quasar.destination.gbq
 
-import scala.Predef.{String, ???}
+import scala.Predef.String
 
 import quasar.EffectfulQSpec
 import quasar.api.destination.DestinationError
