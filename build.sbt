@@ -61,4 +61,4 @@ lazy val core = project
       "org.specs2" %% "specs2-scalaz" % SpecsVersion % Test),
 
     publishAsOSSProject := true)
-  .enablePlugins(AutomateHeaderPlugin, QuasarPlugin)
+  .enablePlugins(QuasarPlugin)
