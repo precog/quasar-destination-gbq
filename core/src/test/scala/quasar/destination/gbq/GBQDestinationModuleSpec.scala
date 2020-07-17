@@ -49,19 +49,17 @@ object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
   "initialization" should {
     "fail with malformed config when config is not decodable" >>* {
       val cfg = Json("malformed" := true)
-      dest(cfg)(r => IO { r match {
+      dest(cfg)(r => IO { r must beLike {
         case Left(DestinationError.MalformedConfiguration(_, c, _)) =>
           c must_=== jString(GBQDestinationModule.Redacted)
-        case _ => ko("Expected a malformed configuration")
       }})
     }
 
     "successfully check project exists" >>* {
       val cfg = config(authCfgJson, "mydataset")
-      dest(cfg)(r => IO { r match {
+      dest(cfg)(r => IO { r must beLike {
         case Right(a) => a.destinationType must_=== DestinationType("gbq", 1L)
         case Left(DestinationError.MalformedConfiguration(_, c, _)) => c must_=== jString("Not Found")
-        case _ => ko("Expeted successful project check")
       }})
     }
   }
