@@ -16,27 +16,22 @@
 
 package quasar.destination.gbq
 
-import quasar.concurrent.NamedDaemonThreadFactory
-
-import cats.effect._
-import cats.syntax.flatMap._
-import cats.effect.{Blocker, Sync}
+import cats.effect.Sync
+import cats.implicits._
 
 import scala.{
   Array,
   Byte,
 }
-import scala.concurrent.ExecutionContext
 
 import java.io.ByteArrayInputStream
-import java.util.concurrent.Executors
 
 import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
 
 
 object GBQAccessToken {
-  private def genAccessToken[F[_]: Sync](auth: Array[Byte]): F[AccessToken] = {
+  def token[F[_]: Sync](auth: Array[Byte]): F[AccessToken] = {
     val credentials = Sync[F] delay {
       val authInputStream = new ByteArrayInputStream(auth)
       GoogleCredentials
@@ -47,12 +42,4 @@ object GBQAccessToken {
       Sync[F].delay(creds.refreshIfExpired()) >>
         Sync[F].delay(creds.refreshAccessToken()))
   }
-
-  private val blocker: Blocker =
-    Blocker.liftExecutionContext(
-      ExecutionContext.fromExecutor(
-        Executors.newCachedThreadPool(NamedDaemonThreadFactory("gbq-destination"))))
-
-  def token[F[_]: Sync: ContextShift](auth: Array[Byte]): F[AccessToken] =
-    blocker.blockOn[F, AccessToken](genAccessToken[F](auth))
 }

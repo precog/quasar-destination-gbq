@@ -36,15 +36,14 @@ import scala.{
   List,
   Option
 }
-import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 
 import java.net.{InetSocketAddress, ProxySelector}
 import java.net.Proxy
 import java.net.Proxy.{Type => ProxyType}
 
-object AsyncHttpClientBuilder extends Http4sClientBuilder with Logging {
-  def apply[F[_]: ConcurrentEffect](implicit ec: ExecutionContext): Resource[F, Client[F]] =
+object AsyncHttpClientBuilder extends Logging {
+  def apply[F[_]: ConcurrentEffect]: Resource[F, Client[F]] =
     Resource.liftF(Search[F]).flatMap(selector =>
       AsyncHttpClient.resource(mkConfig(selector)))
 

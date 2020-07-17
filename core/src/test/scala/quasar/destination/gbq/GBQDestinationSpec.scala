@@ -68,7 +68,7 @@ import shapeless.PolyDefns.identity
 
 object GBQDestinationSpec extends EffectfulQSpec[IO] {
   sequential
-  
+
   import GBQConfig.serviceAccountConfigCodecJson
 
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)

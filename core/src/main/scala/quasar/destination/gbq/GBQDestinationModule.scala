@@ -26,10 +26,10 @@ import quasar.connector.MonadResourceErr
 import argonaut._, Argonaut._
 
 import cats.effect.{
-  Concurrent, 
-  ConcurrentEffect, 
-  ContextShift, 
-  Resource, 
+  Concurrent,
+  ConcurrentEffect,
+  ContextShift,
+  Resource,
   Timer
 }
 import cats.data.EitherT
@@ -53,10 +53,7 @@ import scala.{
   Either,
   Unit
 }
-import scala.concurrent.ExecutionContext
 
-import java.util.concurrent.Executors
-import java.lang.Thread
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -82,12 +79,7 @@ object GBQDestinationModule extends DestinationModule with Logging {
       }
       val init = for {
         cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
-        ec = Executors newCachedThreadPool { r =>
-          val t = new Thread(r)
-          t.setDaemon(true)
-          t
-        }
-        client <- EitherT(AsyncHttpClientBuilder[F](ConcurrentEffect[F], ExecutionContext.fromExecutor(ec)).map(_.asRight[InitializationError[Json]]))
+        client <- EitherT(AsyncHttpClientBuilder[F].map(_.asRight[InitializationError[Json]]))
         _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
       } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
       init.value
@@ -107,7 +99,7 @@ object GBQDestinationModule extends DestinationModule with Logging {
             resp.status match {
               case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
               case _ => DestinationError.malformedConfiguration((
-                destinationType, 
+                destinationType,
                 jString(resp.status.reason),
                 sanitizedConfig.toString)).asLeft[Unit].pure[F]
             }

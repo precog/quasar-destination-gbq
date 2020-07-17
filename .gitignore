@@ -20,3 +20,6 @@ target/
 /secring.pgp.enc
 /keyfile
 /core/src/test/resources/precog-ci-275718-e913743ebfeb.json
+
+*.swo
+*.swp
