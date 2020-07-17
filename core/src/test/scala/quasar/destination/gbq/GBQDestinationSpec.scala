@@ -22,7 +22,7 @@ import scala.Predef.String
 
 import quasar.api.{Column, ColumnType}
 import quasar.api.destination.DestinationError.InitializationError
-import quasar.connector.destination.{Destination, ResultSink}
+import quasar.connector.destination.{Destination, PushmiPullyu, ResultSink}
 import quasar.connector.render.RenderConfig
 import quasar.api.resource.{ResourceName, ResourcePath}
 import quasar.connector.ResourceError
@@ -38,10 +38,10 @@ import fs2.{Stream, text}
 
 import org.http4s.client.Client
 import org.http4s.{
-  AuthScheme, 
-  Credentials, 
-  Method, 
-  Request, 
+  AuthScheme,
+  Credentials,
+  Method,
+  Request,
   Status,
   Uri
 }
@@ -218,14 +218,16 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         IO.raiseError(new RuntimeException(err.toString))
       case Right(dst) =>
         dst.sinks.toList
-          .collectFirst { 
-            case c @ ResultSink.CreateSink(_: RenderConfig.Csv, _) => c 
+          .collectFirst {
+            case c @ ResultSink.CreateSink(_: RenderConfig.Csv, _) => c
           }
           .map(s => f(s.asInstanceOf[ResultSink.CreateSink[IO, ColumnType.Scalar]]))
           .getOrElse(IO.raiseError(new RuntimeException("No CSV sink found!")))
     }
 
-  def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] =
-    GBQDestinationModule.destination[IO](cfg).use(f)
+  def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] = {
+    val pushPull: PushmiPullyu[IO] = _ => _ => Stream.empty[IO]
 
+    GBQDestinationModule.destination[IO](cfg, pushPull).use(f)
+  }
 }

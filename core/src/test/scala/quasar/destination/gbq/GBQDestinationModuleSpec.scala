@@ -21,7 +21,7 @@ import scala.Predef.String
 import quasar.EffectfulQSpec
 import quasar.api.destination.DestinationError
 import quasar.api.destination.DestinationType
-import quasar.connector.destination.Destination
+import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
@@ -29,6 +29,8 @@ import quasar.contrib.scalaz.MonadError_
 import argonaut._, Argonaut._
 
 import cats.effect.{IO, Timer, ContextShift}
+
+import fs2.Stream
 
 import scala.{Either, Left, Right}
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -73,6 +75,9 @@ object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
     ("datasetId" := datasetId) ->:
     jEmptyObject
 
-  def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] =
-    GBQDestinationModule.destination[IO](cfg).use(f)
+  def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] = {
+    val pushPull: PushmiPullyu[IO] = _ => _ => Stream.empty[IO]
+
+    GBQDestinationModule.destination[IO](cfg, pushPull).use(f)
+  }
 }
