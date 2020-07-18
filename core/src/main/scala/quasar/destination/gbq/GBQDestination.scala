@@ -81,7 +81,7 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
     NonEmptyList.one(csvSink)
 
   val gbqRenderConfig: RenderConfig.Csv =
-    RenderConfig.Csv(includeHeader = false)
+    RenderConfig.Csv(includeHeader = true)
 
   private def csvSink: ResultSink[F, ColumnType.Scalar] =
     ResultSink.create[F, ColumnType.Scalar](gbqRenderConfig) { case (path, columns, bytes) =>
@@ -148,9 +148,9 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
         case ColumnType.LocalDate => "DATE".validNel
         case ColumnType.LocalDateTime => "DATETIME".validNel
         case ColumnType.LocalTime => "TIME".validNel
-        case ColumnType.OffsetTime => "TIMESTAMP".validNel
-        case ColumnType.OffsetDateTime => "TIMESTAMP".validNel
-        case ColumnType.OffsetDate => "TIMESTAMP".validNel
+        case ColumnType.OffsetTime => "STRING".validNel
+        case ColumnType.OffsetDateTime => "STRING".validNel
+        case ColumnType.OffsetDate => "STRING".validNel
         case i @ ColumnType.Interval => i.invalidNel
         case ColumnType.Null => "INTEGER1".validNel
       }
