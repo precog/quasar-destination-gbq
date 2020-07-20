@@ -15,4 +15,11 @@ target/
 /scripts/publishAndTag
 /pubring.pgp.enc
 /scripts/readVersion
+/scripts/gbq-enc-private.key
+/scripts/keyfile.txt
 /secring.pgp.enc
+/keyfile
+/core/src/test/resources/precog-ci-275718-e913743ebfeb.json
+
+*.swo
+*.swp
