@@ -33,7 +33,7 @@ import cats.data.{EitherT, ValidatedNel, NonEmptyList}
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
 import cats.implicits._
 
-import fs2.Stream
+import fs2.{Pipe, Stream}
 
 import org.http4s.{
   AuthScheme,
@@ -84,14 +84,14 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
     RenderConfig.Csv(includeHeader = true)
 
   private def csvSink: ResultSink[F, ColumnType.Scalar] =
-    ResultSink.create[F, ColumnType.Scalar](gbqRenderConfig) { case (path, columns, bytes) =>
+    ResultSink.create[F, ColumnType.Scalar, Byte] { (path, columns) =>
       val tableNameF = path.uncons match {
         case Some((ResourceName(name), _)) => name.pure[F]
         case _ => MonadResourceErr[F].raiseError[String](
           ResourceError.notAResource(path))
       }
 
-      for {
+      val pipe: Pipe[F, Byte, Unit] = bytes => for {
         tableName <- Stream.eval[F, String](tableNameF)
         schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
         gbqJobConfig = formGBQJobConfig(schema, config, tableName)
@@ -106,6 +106,8 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
           case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL from returned from job: $e"))
         }
       } yield ()
+
+      (gbqRenderConfig, pipe)
   }
 
   // NB: config overwrites when re-pushing tables
