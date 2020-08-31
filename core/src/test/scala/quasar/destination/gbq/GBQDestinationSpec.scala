@@ -23,7 +23,6 @@ import scala.Predef.String
 import quasar.api.{Column, ColumnType}
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.destination.{Destination, PushmiPullyu, ResultSink}
-import quasar.connector.render.RenderConfig
 import quasar.api.resource.{ResourceName, ResourcePath}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
@@ -34,7 +33,7 @@ import argonaut._, Argonaut._
 import cats.data.NonEmptyList
 import cats.effect.{Blocker, IO, Timer}
 
-import fs2.{Stream, text}
+import fs2.{Pipe, Stream, text}
 
 import org.http4s.client.Client
 import org.http4s.{
@@ -49,7 +48,7 @@ import org.http4s.headers.Authorization
 import org.http4s.client._
 
 
-import scala.{Either, List, StringContext}
+import scala.{Byte, Either, StringContext, Unit}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -95,12 +94,14 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   "csv link" should {
     "reject empty paths with NotAResource" >>* {
       val path = ResourcePath.root()
-      val req = csv(gbqCfg) { sink =>
-          sink.consume(path, NonEmptyList.one(Column("a", ColumnType.Boolean)), Stream.empty).compile.drain
-        }
-        MRE.attempt(req).map(_ must beLike {
-          case -\/(ResourceError.NotAResource(p2)) => p2 must_=== path
-        })
+      val req = csv(gbqCfg) { consume =>
+        consume(path, NonEmptyList.one(Column("a", ColumnType.Boolean)))
+          .apply(Stream.empty)
+          .compile.drain
+      }
+      MRE.attempt(req).map(_ must beLike {
+        case -\/(ResourceError.NotAResource(p2)) => p2 must_=== path
+      })
     }
   }
 
@@ -109,12 +110,12 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
     "successfully upload table" >>* {
       val data = Stream("col1,col2\r\nstuff,true\r\n").through(text.utf8Encode)
       val path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
-      val req =  csv(gbqCfg) { sink =>
-        sink.consume(
-          path,
-          NonEmptyList.fromList(List(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))).get,
-          data)
-        .compile.drain
+      val req =  csv(gbqCfg) { consume =>
+        data
+          .through(consume(
+            path,
+            NonEmptyList.of(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))))
+          .compile.drain
       }
       Timer[IO].sleep(5.seconds).flatMap { _ =>
         MRE.attempt(req).map(_ must beLike {
@@ -135,7 +136,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
           httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
-            case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}")) 
+            case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}"))
         }}
         body = resp.fold(identity, identity)
         result <- IO {
@@ -156,7 +157,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         resp <- Timer[IO].sleep(5.seconds).flatMap { _ =>
           httpClient.run(req).use {
             case Status.Successful(r) => r.attemptAs[String].leftMap(_.message).value
-            case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}")) 
+            case r => r.as[String].map(b => Left(s"Request ${req} failed with status ${r.status.code} and body ${b}"))
         }}
         body = resp.fold(identity, identity)
         result <- IO {
@@ -212,16 +213,22 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   implicit val MRE: MonadError_[IO, ResourceError] =
     MonadError_.facet[IO](ResourceError.throwableP)
 
-  def csv[A](gbqcfg: Json)(f: ResultSink.CreateSink[IO, ColumnType.Scalar] => IO[A]): IO[A] =
+    def csv[A](
+        gbqcfg: Json)(
+          f: ((ResourcePath, NonEmptyList[Column[ColumnType.Scalar]]) => Pipe[IO, Byte, Unit]) => IO[A])
+        : IO[A] =
     dest(gbqcfg) {
       case Left(err) =>
         IO.raiseError(new RuntimeException(err.toString))
       case Right(dst) =>
         dst.sinks.toList
           .collectFirst {
-            case c @ ResultSink.CreateSink(_: RenderConfig.Csv, _) => c
+            case c @ ResultSink.CreateSink(_) => c
           }
-          .map(s => f(s.asInstanceOf[ResultSink.CreateSink[IO, ColumnType.Scalar]]))
+          .map { s =>
+            val sink = s.asInstanceOf[ResultSink.CreateSink[IO, ColumnType.Scalar, Byte]]
+            f(sink.consume(_, _)._2)
+          }
           .getOrElse(IO.raiseError(new RuntimeException("No CSV sink found!")))
     }
 
