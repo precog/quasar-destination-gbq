@@ -1,6 +1,6 @@
 import scala.collection.Seq
 
-ThisBuild / scalaVersion := "2.12.10"
+ThisBuild / scalaVersion := "2.12.12"
 
 ThisBuild / githubRepository := "quasar-destination-gbq"
 
@@ -15,9 +15,9 @@ ThisBuild / githubWorkflowBuildPreamble +=
     List("decryptSecret core/src/test/resources/precog-ci-275718-e913743ebfeb.json.enc"),
     name = Some("Decrypt gcp service account json key"))
 
-val ArgonautVersion = "6.3.0"
-val Http4sVersion = "0.21.6"
-val SpecsVersion = "4.8.3"
+val ArgonautVersion = "6.3.0-M2"
+val Http4sVersion = "0.21.8"
+val SpecsVersion = "4.10.5"
 val Slf4s = "1.7.25"
 val GoogleAuthLib = "0.20.0"
 
