@@ -16,7 +16,7 @@ ThisBuild / githubWorkflowBuildPreamble +=
     name = Some("Decrypt gcp service account json key"))
 
 val ArgonautVersion = "6.3.0-M2"
-val Http4sVersion = "0.21.8"
+val Http4sVersion = "0.21.2"
 val SpecsVersion = "4.10.5"
 val Slf4s = "1.7.25"
 val GoogleAuthLib = "0.20.0"
@@ -51,8 +51,8 @@ lazy val core = project
     quasarPluginDependencies ++= Seq(
       "com.google.auth" % "google-auth-library-oauth2-http" % GoogleAuthLib,
       "org.slf4s" %% "slf4s-api" % Slf4s,
-      "org.http4s" %% "http4s-argonaut" % Http4sVersion,
-      "org.http4s" %% "http4s-async-http-client" % Http4sVersion,
+      "com.precog" %% "http4s-argonaut" % Http4sVersion,
+      "com.precog" %% "http4s-async-http-client" % Http4sVersion,
       "io.argonaut" %% "argonaut" % ArgonautVersion),
 
     libraryDependencies ++= Seq(
