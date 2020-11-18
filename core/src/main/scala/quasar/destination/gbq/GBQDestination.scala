@@ -81,7 +81,9 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
     NonEmptyList.one(csvSink)
 
   val gbqRenderConfig: RenderConfig.Csv =
-    RenderConfig.Csv(includeHeader = true)
+    RenderConfig.Csv(
+      includeHeader = true,
+      numericScale = Some(9)) // NUMERIC data type supports inserting data of up to scale 9
 
   private def csvSink: ResultSink[F, ColumnType.Scalar] =
     ResultSink.create[F, ColumnType.Scalar, Byte] { (path, columns) =>
