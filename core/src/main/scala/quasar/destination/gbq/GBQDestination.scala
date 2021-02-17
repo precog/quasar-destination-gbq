@@ -67,6 +67,7 @@ import java.lang.{RuntimeException, Throwable}
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import scalaz.{NonEmptyList => ZNEList}
+import cats.effect.Timer
 
 
 class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect] private (
@@ -237,7 +238,7 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
 }
 
 object GBQDestination {
-  def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](config: Json)
+  def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect: Timer](config: Json)
       : Resource[F, Either[InitializationError[Json], Destination[F]]] = {
 
     val sanitizedConfig: Json = GBQDestinationModule.sanitizeDestinationConfig(config)
@@ -248,9 +249,30 @@ object GBQDestination {
           (GBQDestinationModule.destinationType, jString(GBQConfig.Redacted), err))
     }
 
+import org.http4s.client.middleware.Retry
+import org.http4s.client.middleware.RetryPolicy
+import scala.concurrent.duration._
+import org.http4s.Response
+import scala.Boolean
+
+    def isRetriableStatus(result: Either[Throwable, Response[F]]): Boolean =
+      result match {
+        case Right(resp) => RetryPolicy.RetriableStatuses(resp.status)
+        case Left(_) => false
+      }
+
     val init = for {
       cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
-      client <- EitherT(AsyncHttpClientBuilder[F].map(_.asRight[InitializationError[Json]]))
+      client <- EitherT(
+        AsyncHttpClientBuilder[F]
+        .map(Retry(RetryPolicy(
+            RetryPolicy.exponentialBackoff(maxWait = 5.seconds, maxRetry = 5),
+            (req: Request[F], result: Either[Throwable, Response[F]]) => {
+              req.method.isIdempotent && isRetriableStatus(result)
+            })))
+        .map(_.asRight[InitializationError[Json]])
+        
+        )
       _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
     } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
 
