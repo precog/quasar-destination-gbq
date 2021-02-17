@@ -69,8 +69,13 @@ import java.nio.charset.StandardCharsets
 import scalaz.{NonEmptyList => ZNEList}
 import cats.effect.Timer
 
+import org.http4s.client.middleware.Retry
+import org.http4s.client.middleware.RetryPolicy
+import scala.concurrent.duration._
+import org.http4s.Response
+import scala.Boolean
 
-class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect] private (
+class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect: Timer] private (
     client: Client[F],
     config: GBQConfig,
     sanitizedConfig: Json) extends LegacyDestination[F] with Logging {
@@ -222,11 +227,13 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
   }
 
   private def upload(client: Client[F], bytes: Stream[F, Byte], uploadLocation: Uri): Stream[F, Unit] = {
+    val policy = RetryPolicy[F](_ => Some(5.seconds))
+    val retryClient = Retry[F](policy)(client)
     val destReq = Request[F](Method.PUT, uploadLocation)
         .putHeaders(Header("Host", "www.googleapis.com"))
         .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
         .withEntity(bytes)
-    val doUpload = client.run(destReq).use { resp =>
+    val doUpload = retryClient.run(destReq).use { resp =>
       resp.status match {
         case Status.Ok => ().pure[F]
         case _ => ApplicativeError[F, Throwable].raiseError[Unit](
@@ -249,27 +256,25 @@ object GBQDestination {
           (GBQDestinationModule.destinationType, jString(GBQConfig.Redacted), err))
     }
 
-import org.http4s.client.middleware.Retry
-import org.http4s.client.middleware.RetryPolicy
-import scala.concurrent.duration._
-import org.http4s.Response
-import scala.Boolean
 
-    def isRetriableStatus(result: Either[Throwable, Response[F]]): Boolean =
-      result match {
-        case Right(resp) => RetryPolicy.RetriableStatuses(resp.status)
-        case Left(_) => false
-      }
+    // def isRetriableStatus(result: Either[Throwable, Response[F]]): Boolean =
+    //   result match {
+    //     case Right(resp) => RetryPolicy.RetriableStatuses(resp.status)
+    //     case Left(_) => false
+    //   }
 
     val init = for {
       cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
       client <- EitherT(
         AsyncHttpClientBuilder[F]
-        .map(Retry(RetryPolicy(
-            RetryPolicy.exponentialBackoff(maxWait = 5.seconds, maxRetry = 5),
-            (req: Request[F], result: Either[Throwable, Response[F]]) => {
-              req.method.isIdempotent && isRetriableStatus(result)
-            })))
+        // .map(Retry(
+        //   RetryPolicy(
+        //     RetryPolicy.exponentialBackoff(maxWait = 5.seconds, maxRetry = 5),
+        //     (req: Request[F], result: Either[Throwable, Response[F]]) => {
+        //       req.method.isIdempotent && isRetriableStatus(result)
+        //     }
+        //   )
+        // ))
         .map(_.asRight[InitializationError[Json]])
         
         )
@@ -279,7 +284,7 @@ import scala.Boolean
     init.value
   }
 
-  private def isLive[F[_]: Concurrent: ContextShift](
+  private def isLive[F[_]: Concurrent: ContextShift: Timer](
       client: Client[F],
       config: GBQConfig,
       sanitizedConfig: Json)
