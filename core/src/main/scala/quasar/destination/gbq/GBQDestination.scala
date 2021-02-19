@@ -122,13 +122,13 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
       : GBQJobConfig =
     GBQJobConfig(
       "CSV",
-      "1",
-      "true",
+      1,
+      true,
       schema.toList,
       Some("DAY"),
       WriteDisposition("WRITE_TRUNCATE"), // default is to drop and replace tables when pushing
       GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId),
-      "21600000", // 6hrs load job limit
+      21600000, // 6hrs load job limit
       "LOAD")
 
   def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =

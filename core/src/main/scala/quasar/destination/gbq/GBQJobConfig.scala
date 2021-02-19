@@ -19,7 +19,7 @@ package quasar.destination.gbq
 import scala.Predef.String
 import argonaut._ , Argonaut._
 import cats.implicits._
-import scala.{List, Option}
+import scala.{Boolean, List, Long, Option}
 
 final case class GBQDestinationTable(project: String, dataset: String, table: String)
   
@@ -28,13 +28,13 @@ final case class GBQSchema(typ: String, name: String)
 
 final case class GBQJobConfig(
   sourceFormat: String,
-  skipLeadingRows: String,
-  allowQuotedNewLines: String,
+  skipLeadingRows: Long,
+  allowQuotedNewLines: Boolean,
   schema: List[GBQSchema], 
   timePartition: Option[String],
   writeDisposition: WriteDisposition,
   destinationTable: GBQDestinationTable,
-  jobTimeoutMs: String,
+  jobTimeoutMs: Long,
   jobType: String)
 
 object GBQJobConfig {
@@ -57,13 +57,13 @@ object GBQJobConfig {
       val load = c --\ "configuration" --\ "load"
       for {
         sourceFormat <- (load --\ ("sourceFormat")).as[String]
-        skipLeadingRows <- (load --\ "skipLeadingRows").as[String]
-        allowQuotedNewLines <- (load --\ "allowQuotedNewLines").as[String]
+        skipLeadingRows <- (load --\ "skipLeadingRows").as[Long]
+        allowQuotedNewLines <- (load --\ "allowQuotedNewLines").as[Boolean]
         schema <- (load --\ "schema" --\ "fields").as[List[GBQSchema]]
         timePartition <- (load --\ "timePartition").as[Option[String]]
         writeDisposition <- (load --\ "writeDisposition").as(writeDispositionCodecJson)
         destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
-        jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[String]
+        jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[Long]
         jobType <- (c --\ "configuration" --\ "jobType").as[String]
       } yield GBQJobConfig(
         sourceFormat,

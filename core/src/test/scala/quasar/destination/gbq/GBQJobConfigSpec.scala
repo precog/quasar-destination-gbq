@@ -29,8 +29,8 @@ object GBQJobConfigSpec extends Specification {
     "configuration" := Json.obj(
       "load" := Json.obj(
         "sourceFormat" := jString("CSV"),
-        "skipLeadingRows" := jString("1"),
-        "allowQuotedNewLines" := jString("true"),
+        "skipLeadingRows" := jNumber(1),
+        "allowQuotedNewLines" := jBool(true),
         "schema" := Json.obj(
           "fields" := Json.array(
             Json.obj(
@@ -46,18 +46,18 @@ object GBQJobConfigSpec extends Specification {
           "projectId" := jString("myproject"),
           "datasetId" := jString("mydataset"),
           "tableId" := jString("mytable"))),
-      "jobTimeoutMs" := jString("21600000"),
+      "jobTimeoutMs" := jNumber(21600000),
       "jobType" := jString("LOAD")))
 
   val testJobCfg = GBQJobConfig(
     "CSV",
-    "1",
-    "true",
+    1,
+    true,
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
     Some("DAY"),
     WriteDisposition("WRITE_APPEND"),
     GBQDestinationTable("myproject", "mydataset", "mytable"),
-    "21600000",
+    21600000,
     "LOAD")
 
   "decode json job config to GBQJobConfig" >> {
