@@ -16,10 +16,11 @@
 
 package quasar.destination.gbq
 
+import scala.{Boolean, List, Long}
 import scala.Predef.String
+
 import argonaut._ , Argonaut._
 import cats.implicits._
-import scala.{Boolean, List, Long, Option}
 
 final case class GBQDestinationTable(project: String, dataset: String, table: String)
   
@@ -29,9 +30,9 @@ final case class GBQSchema(typ: String, name: String)
 final case class GBQJobConfig(
   sourceFormat: String,
   skipLeadingRows: Long,
-  allowQuotedNewLines: Boolean,
+  allowQuotedNewlines: Boolean,
   schema: List[GBQSchema], 
-  timePartition: Option[String],
+  timePartitioningType: String,
   writeDisposition: WriteDisposition,
   destinationTable: GBQDestinationTable,
   jobTimeoutMs: Long,
@@ -45,10 +46,11 @@ object GBQJobConfig {
         "load" := Json.obj(
           "sourceFormat" := cfg.sourceFormat,
           "skipLeadingRows" := cfg.skipLeadingRows,
-          "allowQuotedNewLines" := cfg.allowQuotedNewLines,
+          "allowQuotedNewlines" := cfg.allowQuotedNewlines,
           "schema" := Json.obj(
             "fields" := cfg.schema.toList),
-          "timePartition" := cfg.timePartition,
+          "timePartitioning" := Json.obj(
+            "type" := cfg.timePartitioningType),
           "writeDisposition" := cfg.writeDisposition,
           "destinationTable" := cfg.destinationTable),
         "jobTimeoutMs" := cfg.jobTimeoutMs,
@@ -58,9 +60,9 @@ object GBQJobConfig {
       for {
         sourceFormat <- (load --\ ("sourceFormat")).as[String]
         skipLeadingRows <- (load --\ "skipLeadingRows").as[Long]
-        allowQuotedNewLines <- (load --\ "allowQuotedNewLines").as[Boolean]
+        allowQuotedNewlines <- (load --\ "allowQuotedNewlines").as[Boolean]
         schema <- (load --\ "schema" --\ "fields").as[List[GBQSchema]]
-        timePartition <- (load --\ "timePartition").as[Option[String]]
+        timePartitioningType <- (load --\ "timePartitioning" --\ "type").as[String]
         writeDisposition <- (load --\ "writeDisposition").as(writeDispositionCodecJson)
         destinationTable <- (load --\ "destinationTable").as[GBQDestinationTable]
         jobTimeoutMs <- (c --\ "configuration" --\ "jobTimeoutMs").as[Long]
@@ -68,9 +70,9 @@ object GBQJobConfig {
       } yield GBQJobConfig(
         sourceFormat,
         skipLeadingRows,
-        allowQuotedNewLines,
+        allowQuotedNewlines,
         schema,
-        timePartition,
+        timePartitioningType,
         writeDisposition,
         destinationTable,
         jobTimeoutMs,

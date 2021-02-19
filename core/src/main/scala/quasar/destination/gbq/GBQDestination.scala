@@ -125,7 +125,7 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
       1,
       true,
       schema.toList,
-      Some("DAY"),
+      "DAY",
       WriteDisposition("WRITE_TRUNCATE"), // default is to drop and replace tables when pushing
       GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId),
       21600000, // 6hrs load job limit

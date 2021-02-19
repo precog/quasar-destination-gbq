@@ -16,11 +16,11 @@
 
 package quasar.destination.gbq
 
+import scala.List
+
 import argonaut.{Argonaut, DecodeJson, Json}, Argonaut._
 
 import org.specs2.mutable.Specification
-
-import scala.{Some, List}
 
 object GBQJobConfigSpec extends Specification {
   val decode = DecodeJson.of[GBQJobConfig].decodeJson(_)
@@ -30,7 +30,7 @@ object GBQJobConfigSpec extends Specification {
       "load" := Json.obj(
         "sourceFormat" := jString("CSV"),
         "skipLeadingRows" := jNumber(1),
-        "allowQuotedNewLines" := jBool(true),
+        "allowQuotedNewlines" := jBool(true),
         "schema" := Json.obj(
           "fields" := Json.array(
             Json.obj(
@@ -40,7 +40,8 @@ object GBQJobConfigSpec extends Specification {
             Json.obj(
               "type" := jString("INT"),
               "name" := jString("Id")))),
-        "timePartition" := jString("DAY"),
+        "timePartitioning" := Json.obj(
+          "type" := jString("DAY")),
         "writeDisposition" := jString("WRITE_APPEND"),
         "destinationTable" := Json.obj(
           "projectId" := jString("myproject"),
@@ -54,7 +55,7 @@ object GBQJobConfigSpec extends Specification {
     1,
     true,
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
-    Some("DAY"),
+    "DAY",
     WriteDisposition("WRITE_APPEND"),
     GBQDestinationTable("myproject", "mydataset", "mytable"),
     21600000,
