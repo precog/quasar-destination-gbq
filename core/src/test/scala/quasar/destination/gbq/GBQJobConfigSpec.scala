@@ -16,11 +16,11 @@
 
 package quasar.destination.gbq
 
+import scala.List
+
 import argonaut.{Argonaut, DecodeJson, Json}, Argonaut._
 
 import org.specs2.mutable.Specification
-
-import scala.{Some, List}
 
 object GBQJobConfigSpec extends Specification {
   val decode = DecodeJson.of[GBQJobConfig].decodeJson(_)
@@ -29,8 +29,8 @@ object GBQJobConfigSpec extends Specification {
     "configuration" := Json.obj(
       "load" := Json.obj(
         "sourceFormat" := jString("CSV"),
-        "skipLeadingRows" := jString("1"),
-        "allowQuotedNewLines" := jString("true"),
+        "skipLeadingRows" := jNumber(1),
+        "allowQuotedNewlines" := jBool(true),
         "schema" := Json.obj(
           "fields" := Json.array(
             Json.obj(
@@ -40,24 +40,25 @@ object GBQJobConfigSpec extends Specification {
             Json.obj(
               "type" := jString("INT"),
               "name" := jString("Id")))),
-        "timePartition" := jString("DAY"),
+        "timePartitioning" := Json.obj(
+          "type" := jString("DAY")),
         "writeDisposition" := jString("WRITE_APPEND"),
         "destinationTable" := Json.obj(
           "projectId" := jString("myproject"),
           "datasetId" := jString("mydataset"),
           "tableId" := jString("mytable"))),
-      "jobTimeoutMs" := jString("21600000"),
+      "jobTimeoutMs" := jNumber(21600000),
       "jobType" := jString("LOAD")))
 
   val testJobCfg = GBQJobConfig(
     "CSV",
-    "1",
-    "true",
+    1,
+    true,
     List[GBQSchema](GBQSchema("STRING", "Manager"), GBQSchema("INT", "Id")),
-    Some("DAY"),
+    "DAY",
     WriteDisposition("WRITE_APPEND"),
     GBQDestinationTable("myproject", "mydataset", "mytable"),
-    "21600000",
+    21600000,
     "LOAD")
 
   "decode json job config to GBQJobConfig" >> {

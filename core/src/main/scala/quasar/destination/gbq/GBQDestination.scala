@@ -47,6 +47,8 @@ import org.http4s.{
 }
 import org.http4s.argonaut.jsonEncoderOf
 import org.http4s.client._
+//import org.http4s.client.middleware.Retry
+//import org.http4s.client.middleware.RetryPolicy
 import org.http4s.Header
 import org.http4s.headers.{Authorization, `Content-Type`, Location}
 import org.slf4s.Logging
@@ -60,6 +62,7 @@ import scala.{
   StringContext,
   Unit
 }
+//import scala.concurrent.duration._
 import scala.util.{Left, Right}
 
 import java.lang.{RuntimeException, Throwable}
@@ -68,12 +71,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import scalaz.{NonEmptyList => ZNEList}
 import cats.effect.Timer
-
-import org.http4s.client.middleware.Retry
-import org.http4s.client.middleware.RetryPolicy
-import scala.concurrent.duration._
-import org.http4s.Response
-import scala.Boolean
+import scala.None
 
 class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect: Timer] private (
     client: Client[F],
@@ -99,21 +97,60 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
           ResourceError.notAResource(path))
       }
 
-      val pipe: Pipe[F, Byte, Unit] = bytes => for {
-        tableName <- Stream.eval[F, String](tableNameF)
-        schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
-        gbqJobConfig = formGBQJobConfig(schema, config, tableName)
-        accessToken <- Stream.eval(GBQAccessToken.token(config.serviceAccountAuthBytes))
-        _ <- Stream.eval(mkDataset(client, accessToken.getTokenValue, config))
-        eitherloc <- Stream.eval(mkGbqJob(client, accessToken.getTokenValue, gbqJobConfig))
-        _ <- Stream.eval(
-          Sync[F].delay(
-            log.info(s"(re)creating ${config.authCfg.projectId}.${config.datasetId}.${tableName} with schema ${columns.show}")))
-        _ <- eitherloc match {
-          case Right(locationUri) => upload(client, bytes, locationUri)
-          case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL from returned from job: $e"))
+      val pipe: Pipe[F, Byte, Unit] = {
+        def go(s: Stream[F, Byte]): fs2.Pull[F, Unit, Unit] = {
+          s.pull.uncons.flatMap {
+            case None =>
+              log.debug("pull NONE case")
+              fs2.Pull.done
+            case Some((current, rest)) =>
+              if (Stream.chunk(current).toList.isEmpty) {
+                log.debug("pull SOME case non empty chunk")//: " + Stream.chunk(current).toList)
+                go(rest)
+              }
+              else {
+                log.debug("pull SOME case chunk")//: " + Stream.chunk(current).toList)
+                val k: Stream[F, Byte] = Stream.chunk(current) //++ rest
+                for {
+                  tableName <- Stream.eval[F, String](tableNameF)
+                  schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
+                  gbqJobConfig = formGBQJobConfig(schema, config, tableName)
+                  accessToken <- Stream.eval(GBQAccessToken.token(config.serviceAccountAuthBytes))
+                  eitherloc <- Stream.eval(mkGbqJob(client, accessToken.getTokenValue, gbqJobConfig))
+                  _ <- Stream.eval(mkDataset(client, accessToken.getTokenValue, config))
+                  _ <- Stream.eval(
+                    Sync[F].delay(
+                      log.info(s"(re)creating ${config.authCfg.projectId}.${config.datasetId}.${tableName} with schema ${columns.show}")))
+                  _ <- eitherloc match {
+                    case Right(locationUri) => upload(client, k, locationUri)
+                    case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL from returned from job: $e"))
+                  }
+                } yield ()
+                go(rest)
+              }
+          }
         }
-      } yield ()
+        log.debug("pipe is about to run")
+        bytes => go(bytes).stream
+      }
+
+      // val pipe: Pipe[F, Byte, Unit] = bytes => for {
+      //   tableName <- Stream.eval[F, String](tableNameF)
+      //   schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
+      //   tableName <- Stream.eval[F, String](tableNameF)
+      //   schema <- Stream.fromEither[F](ensureValidColumns(columns).leftMap(new RuntimeException(_)))
+      //   gbqJobConfig = formGBQJobConfig(schema, config, tableName)
+      //   accessToken <- Stream.eval(GBQAccessToken.token(config.serviceAccountAuthBytes))
+      //   _ <- Stream.eval(mkDataset(client, accessToken.getTokenValue, config))
+      //   eitherloc <- Stream.eval(mkGbqJob(client, accessToken.getTokenValue, gbqJobConfig))
+      //   _ <- Stream.eval(
+      //     Sync[F].delay(
+      //       log.info(s"(re)creating ${config.authCfg.projectId}.${config.datasetId}.${tableName} with schema ${columns.show}")))
+      //   _ <- eitherloc match {
+      //     case Right(locationUri) => upload(client, bytes, locationUri)
+      //     case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL from returned from job: $e"))
+      //   }
+      // } yield ()
 
       (gbqRenderConfig, pipe)
   }
@@ -128,13 +165,13 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
       : GBQJobConfig =
     GBQJobConfig(
       "CSV",
-      "1",
-      "true",
+      1,
+      true,
       schema.toList,
-      Some("DAY"),
+      "DAY",
       WriteDisposition("WRITE_TRUNCATE"), // default is to drop and replace tables when pushing
       GBQDestinationTable(config.authCfg.projectId, config.datasetId, tableId),
-      "21600000", // 6hrs load job limit
+      21600000, // 6hrs load job limit
       "LOAD")
 
   def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
@@ -166,6 +203,7 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
       }
 
   private def mkDataset(client: Client[F], accessToken: String, config: GBQConfig): F[Either[InitializationError[Json], Unit]] = {
+    log.debug("mkDataset about to start")
     implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQDatasetConfig] =
       jsonEncoderOf[F, GBQDatasetConfig]
 
@@ -227,13 +265,14 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
   }
 
   private def upload(client: Client[F], bytes: Stream[F, Byte], uploadLocation: Uri): Stream[F, Unit] = {
-    val policy = RetryPolicy[F](_ => Some(5.seconds))
-    val retryClient = Retry[F](policy)(client)
+    //val policy = RetryPolicy[F](_ => Some(5.seconds))
+    //val retryClient = Retry[F](policy)(client)
+    log.debug("UPLOADING")
     val destReq = Request[F](Method.PUT, uploadLocation)
         .putHeaders(Header("Host", "www.googleapis.com"))
         .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
         .withEntity(bytes)
-    val doUpload = retryClient.run(destReq).use { resp =>
+    val doUpload = client.run(destReq).use { resp =>
       resp.status match {
         case Status.Ok => ().pure[F]
         case _ => ApplicativeError[F, Throwable].raiseError[Unit](
@@ -256,28 +295,9 @@ object GBQDestination {
           (GBQDestinationModule.destinationType, jString(GBQConfig.Redacted), err))
     }
 
-
-    // def isRetriableStatus(result: Either[Throwable, Response[F]]): Boolean =
-    //   result match {
-    //     case Right(resp) => RetryPolicy.RetriableStatuses(resp.status)
-    //     case Left(_) => false
-    //   }
-
     val init = for {
       cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
-      client <- EitherT(
-        AsyncHttpClientBuilder[F]
-        // .map(Retry(
-        //   RetryPolicy(
-        //     RetryPolicy.exponentialBackoff(maxWait = 5.seconds, maxRetry = 5),
-        //     (req: Request[F], result: Either[Throwable, Response[F]]) => {
-        //       req.method.isIdempotent && isRetriableStatus(result)
-        //     }
-        //   )
-        // ))
-        .map(_.asRight[InitializationError[Json]])
-        
-        )
+      client <- EitherT(AsyncHttpClientBuilder[F].map(_.asRight[InitializationError[Json]]))
       _ <- EitherT(Resource.liftF(isLive(client, cfg, sanitizedConfig)))
     } yield new GBQDestination[F](client, cfg, sanitizedConfig): Destination[F]
 
