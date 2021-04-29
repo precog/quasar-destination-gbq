@@ -16,6 +16,7 @@
 
 package quasar.destination.gbq
 
+import slamdata.Predef._
 import scala.Predef.String
 
 import quasar.EffectfulQSpec

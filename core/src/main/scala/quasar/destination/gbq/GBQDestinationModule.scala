@@ -21,7 +21,7 @@ import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.destination.{Destination, DestinationModule, PushmiPullyu}
 import quasar.connector.MonadResourceErr
 
-import argonaut._, Argonaut._
+import argonaut._
 
 import cats.effect.{
   ConcurrentEffect,
@@ -43,7 +43,7 @@ object GBQDestinationModule extends DestinationModule with Logging {
 
   def sanitizeDestinationConfig(config: Json) = {
     config.as[GBQConfig].toOption match {
-      case Some(c) => Json("authCfg" := GBQConfig.Redacted, "datasetId" := c.datasetId)
+      case Some(c) => c.sanitizedJson
       case _ => Json.jEmptyObject
     }
   }

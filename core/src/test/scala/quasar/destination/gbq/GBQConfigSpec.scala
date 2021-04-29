@@ -16,11 +16,11 @@
 
 package quasar.destination.gbq
 
+import slamdata.Predef._
+
 import argonaut.{Argonaut, DecodeJson, Json}, Argonaut._
 
 import org.specs2.mutable.Specification
-
-import scala.StringContext
 
 import java.net.URI
 
@@ -65,7 +65,8 @@ object GBQConfigSpec extends Specification {
       privateKeyId = PRIVATE_KEY_ID,
       clientEmail = CLIENT_EMAIL,
       accountType = ACCOUNT_TYPE),
-    datasetId = DATASET)
+    datasetId = DATASET,
+    maxFileSize = None)
 
   "decode json config to GBQConfig" >> {
     decode(jsonGbqCfg).toOption must beSome(testGbqCfg)
@@ -76,7 +77,7 @@ object GBQConfigSpec extends Specification {
   }
 
   "ensure GBQConfig will be readacted" >> {
-    GBQDestinationModule.sanitizeDestinationConfig(jsonGbqCfg) must_=== 
+    GBQDestinationModule.sanitizeDestinationConfig(jsonGbqCfg) must_===
       Json.obj("authCfg" := jString("<REDACTED>"), "datasetId" := jString(DATASET))
   }
 }
