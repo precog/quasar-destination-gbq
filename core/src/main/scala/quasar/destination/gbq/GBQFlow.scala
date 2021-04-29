@@ -128,7 +128,7 @@ final class GBQFlow[F[_]: Concurrent](
     val query =
       s"DELETE FROM ${config.authCfg.projectId}.${config.datasetId}.$name $where"
 
-    val qConfig = QueryJobConfig(query, 6 * 3600 * 1000)
+    val qConfig = QueryJobConfig(query, 6L * 3600L * 1000L)
 
     filter(qConfig)
   }
