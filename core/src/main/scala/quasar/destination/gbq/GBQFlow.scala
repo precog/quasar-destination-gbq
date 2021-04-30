@@ -110,6 +110,10 @@ final class GBQFlow[F[_]: Concurrent](
       else s"${col.name} IN (${strs.mkString(", ")})"
     }
 
+    // We group ids into 64 sized batches like
+    // foo in (a0...a63) or foo in (a64...a127)
+    // because there is definitely a limit for `IN` sentence and
+    // it's definitely more than 64.
     def group(ix: Int, accum: List[String]): String = {
       val nextIx = ix + 64
       val taken = strs.slice(ix, nextIx)
@@ -121,26 +125,29 @@ final class GBQFlow[F[_]: Concurrent](
         group(nextIx, nextAccum)
     }
 
-    val groupped = group(0, List())
+    val grouped = group(0, List())
 
-    val where = if (groupped.isEmpty) "" else s"WHERE $groupped"
+    if (grouped.isEmpty) {
+      // Nothing to delete
+      ().pure[Stream[F, *]]
+    } else {
+      val query =
+        s"DELETE FROM ${config.authCfg.projectId}.${config.datasetId}.$name WHERE $grouped"
 
-    val query =
-      s"DELETE FROM ${config.authCfg.projectId}.${config.datasetId}.$name $where"
+      val qConfig = QueryJobConfig(query, 6L * 3600L * 1000L)
 
-    val qConfig = QueryJobConfig(query, 6L * 3600L * 1000L)
-
-    filter(qConfig)
+      filter(qConfig)
+    }
   }
 
   private def filter(q: QueryJobConfig): Stream[F, Unit] = {
     implicit def entityEncoder: EntityEncoder[F, QueryJobConfig] =
       jsonEncoderOf[F, QueryJobConfig]
 
-    val uri = StringToUri.get(s"$uriRoot/queries")
+    StringToUri.get(s"$uriRoot/queries") match {
+      case Left(_) =>
+        Stream.raiseError[F](new RuntimeException(s"Incorrect url constructed: $uriRoot/queries"))
 
-    uri match {
-      case Left(_) => Stream.raiseError[F](new RuntimeException(s"Incorrect url constructed: $uriRoot/queries"))
       case Right(uri) =>
         val reqF = credsF map { creds =>
           Request[F](Method.POST, uri)
@@ -148,13 +155,18 @@ final class GBQFlow[F[_]: Concurrent](
             .withContentType(`Content-Type`(MediaType.application.json))
             .withEntity(q)
         }
-
-        Stream.eval(reqF).flatMap(client.stream) flatMap { resp => resp.status match {
-          case Status.Ok =>
-            ().pure[Stream[F, *]]
-          case x =>
-            Stream.raiseError[F](new RuntimeException("An error occured during existing ids filtering"))
-        }}
+        for {
+          req <- Stream.eval(reqF)
+          resp <- client.stream(req)
+          body <- Stream.eval(resp.as[String])
+          _ <- resp.status match {
+            case Status.Ok =>
+              ().pure[Stream[F, *]]
+            case x =>
+              Stream.raiseError[F](new RuntimeException(
+                s"An error occured during existing ids filtering. status: $x, response: $body"))
+          }
+        } yield ()
     }
   }
 
@@ -189,9 +201,7 @@ final class GBQFlow[F[_]: Concurrent](
 
     val dCfg = GBQDatasetConfig(config.authCfg.projectId, config.datasetId)
 
-    val uri = StringToUri.get(s"$uriRoot/datasets")
-
-    uri.fold(_.asLeft[Unit].pure[F], uri => {
+    StringToUri.get(s"$uriRoot/datasets").fold(_.asLeft[Unit].pure[F], uri => {
 
       val datasetReqF = credsF map { creds =>
         Request[F](Method.POST, uri)
@@ -200,20 +210,20 @@ final class GBQFlow[F[_]: Concurrent](
           .withEntity(dCfg)
         }
 
-        Resource.liftF(datasetReqF).flatMap(client.run).use { resp =>
-          resp.status match {
-            case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
-            case Status.Conflict =>
-              DestinationError.invalidConfiguration(
-                (GBQDestinationModule.destinationType,
-                jString(s"Reason: ${resp.status.reason}"),
-                ZNEList(resp.status.reason))).asLeft[Unit].pure[F]
-            case status =>
-              DestinationError.malformedConfiguration(
-                (GBQDestinationModule.destinationType, jString(s"Reason: ${status.reason}"),
-                config.sanitizedJson.toString)).asLeft[Unit].pure[F]
-          }
+      Resource.liftF(datasetReqF).flatMap(client.run).use { resp =>
+        resp.status match {
+          case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
+          case Status.Conflict =>
+            DestinationError.invalidConfiguration(
+              (GBQDestinationModule.destinationType,
+              jString(s"Reason: ${resp.status.reason}"),
+              ZNEList(resp.status.reason))).asLeft[Unit].pure[F]
+          case status =>
+            DestinationError.malformedConfiguration(
+              (GBQDestinationModule.destinationType, jString(s"Reason: ${status.reason}"),
+              config.sanitizedJson.toString)).asLeft[Unit].pure[F]
         }
+      }
     })
   }
 
@@ -224,10 +234,8 @@ final class GBQFlow[F[_]: Concurrent](
       URLEncoder.encode(jCfg.destinationTable.project, StandardCharsets.UTF_8.toString)
     val jobUrlString =
       s"https://bigquery.googleapis.com/upload/bigquery/v2/projects/${project}/jobs?uploadType=resumable"
-    val uri =
-      StringToUri.get(jobUrlString)
 
-    uri.fold(_.asLeft[Uri].pure[F], uri => {
+    StringToUri.get(jobUrlString).fold(_.asLeft[Uri].pure[F], uri => {
       val jobReq = credsF map { creds =>
         Request[F](Method.POST,uri)
           .withHeaders(creds)
@@ -289,9 +297,10 @@ object GBQFlow {
         s"Some column types are not supported: ${mkErrorString(errs)}"
       }}
     }
+
   private def mkErrorString(errs: NonEmptyList[ColumnType.Scalar]): String =
     errs
-      .map(err => s"Column of type ${err.show} is not supported by Gooble Big Query")
+      .map(err => s"Column of type ${err.show} is not supported by Google Big Query")
       .intercalate(", ")
 
   private def mkColumn(c: Column[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, GBQSchema] =

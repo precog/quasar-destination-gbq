@@ -273,6 +273,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         DataEvent.Commit(OffsetKey.Actual.string("commit0")))
 
       val data1: Stream[IO, DataEvent[Byte, OffsetKey.Actual[String]]] = Stream(
+        // Checking that empty delte doesn't drop the table
+        DataEvent.Delete(IdBatch.Strings(Array(), 0)),
         DataEvent.Create(Chunk.array("d,4\r\n".getBytes)),
         DataEvent.Commit(OffsetKey.Actual.string("commit1")),
         DataEvent.Create(Chunk.array("e,5\r\n".getBytes)),
