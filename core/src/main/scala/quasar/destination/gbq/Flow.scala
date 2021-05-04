@@ -16,22 +16,12 @@
 
 package quasar.destination.gbq
 
-import scala.Predef.String
+import slamdata.Predef._
 
-import argonaut._, Argonaut._
+import fs2.{Stream, Pipe}
+import quasar.connector.IdBatch
 
-final case class GBQDatasetConfig(projectId: String, datasetId: String)
-
-object GBQDatasetConfig {
-  implicit val codecJson: CodecJson[GBQDatasetConfig] =
-    CodecJson(
-      (g: GBQDatasetConfig) => Json.obj(
-        "datasetReference" := Json.obj(
-          "projectId" := g.projectId,
-          "datasetId" := g.datasetId
-        )),
-      c => for {
-        projectId <- (c --\ "datasetReference" --\ "projectId").as[String]
-        datasetId <- (c --\ "datasetReference" --\ "datasetId").as[String]
-      } yield GBQDatasetConfig(projectId, datasetId))
+trait Flow[F[_]] {
+  def ingest: Pipe[F, Byte, Unit]
+  def delete(ids: IdBatch): Stream[F, Unit]
 }

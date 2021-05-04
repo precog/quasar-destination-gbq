@@ -16,21 +16,24 @@
 
 package quasar.destination.gbq
 
-import scala.Predef.String
+import slamdata.Predef._
 
 import argonaut._, Argonaut._
 
 import cats.implicits._
 
-import scala.{Array, Byte, StringContext, Either}
-
+import scala.util.Either
 import java.net.{URI, URISyntaxException}
 
 final case class GBQConfig(
     authCfg: ServiceAccountConfig,
-    datasetId: String) {
-  import GBQConfig.serviceAccountConfigCodecJson
+    datasetId: String,
+    maxFileSize: Option[Long]) {
+  import GBQConfig._
   val serviceAccountAuthBytes: Array[Byte] = authCfg.asJson.toString.getBytes("UTF-8")
+
+  def sanitizedJson: Json =
+    Json("authCfg" := Redacted, "datasetId" := datasetId)
 }
 
 final case class ServiceAccountConfig(
@@ -59,7 +62,7 @@ object GBQConfig {
           DecodeResult.ok(_))
       } yield uri)
 
-  implicit val serviceAccountConfigCodecJson: CodecJson[ServiceAccountConfig] = 
+  implicit val serviceAccountConfigCodecJson: CodecJson[ServiceAccountConfig] =
     casecodec10[URI,URI, String, String, URI, URI, String, String, String, String, ServiceAccountConfig](
       (tokenUri,
       authProviderCertUrl,
@@ -81,8 +84,8 @@ object GBQConfig {
         privateKeyId = privateKeyId,
         clientEmail = clientEmail,
         accountType = accountType),
-      sac => 
-        (sac.tokenUri, 
+      sac =>
+        (sac.tokenUri,
         sac.authProviderCertUrl,
         sac.privateKey,
         sac.clientId,
@@ -103,8 +106,19 @@ object GBQConfig {
           "client_email",
           "type")
 
-  implicit val gbqConfigCodecJson: CodecJson[GBQConfig] =
-    casecodec2[ServiceAccountConfig, String, GBQConfig](
-      (authCfg, datasetId) => GBQConfig(authCfg, datasetId),
-      gbqc => (gbqc.authCfg, gbqc.datasetId).some)("authCfg", "datasetId")
+  implicit val encodeJson: EncodeJson[GBQConfig] = EncodeJson { cfg =>
+    ("authCfg" := cfg.authCfg) ->:
+    ("datasetId" := cfg.datasetId) ->:
+    ("maxFileSize" :=? cfg.maxFileSize) ->?:
+    jEmptyObject
+  }
+
+  implicit val decodeJson: DecodeJson[GBQConfig] = DecodeJson { c =>
+    for {
+      authCfg <- (c --\ "authCfg").as[ServiceAccountConfig]
+      datasetId <- (c --\ "datasetId").as[String]
+      maxFileSize <- (c --\ "maxFileSize").as[Option[Long]]
+    } yield GBQConfig(authCfg, datasetId, maxFileSize)
+
+  }
 }

@@ -16,22 +16,21 @@
 
 package quasar.destination.gbq
 
-import scala.Predef.String
+import slamdata.Predef._
 
 import argonaut._, Argonaut._
 
-final case class GBQDatasetConfig(projectId: String, datasetId: String)
+final case class QueryJobConfig(
+  query: String,
+  timeoutMs: Long)
 
-object GBQDatasetConfig {
-  implicit val codecJson: CodecJson[GBQDatasetConfig] =
-    CodecJson(
-      (g: GBQDatasetConfig) => Json.obj(
-        "datasetReference" := Json.obj(
-          "projectId" := g.projectId,
-          "datasetId" := g.datasetId
-        )),
-      c => for {
-        projectId <- (c --\ "datasetReference" --\ "projectId").as[String]
-        datasetId <- (c --\ "datasetReference" --\ "datasetId").as[String]
-      } yield GBQDatasetConfig(projectId, datasetId))
+object QueryJobConfig {
+  implicit val encode: EncodeJson[QueryJobConfig] = EncodeJson { (jc: QueryJobConfig) =>
+    ("query" := jc.query) ->:
+    ("timeoutMs" := jc.timeoutMs) ->:
+    ("useLegacySql" := false) ->:
+    ("useQueryCache" := false) ->:
+    jEmptyObject
+  }
 }
+

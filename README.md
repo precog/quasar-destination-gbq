@@ -16,7 +16,8 @@ libraryDependencies += "com.precog" %% "quasar-destination-gbq" % <version>
   },
   "config": {
     "authCfg": <service-account-json-auth-file-contents>,
-    "datasetId": <dataset-name>
+    "datasetId": <dataset-name>,
+    "maxFileSize": Number?
   }
 }
 ```
@@ -24,6 +25,7 @@ libraryDependencies += "com.precog" %% "quasar-destination-gbq" % <version>
 - `destination-name` is what you would like to name the destination
 - `service-account-json-auth-file-contents` is the contents of your service account authentication json file in string format
 - `dataset-name` is the dataset name you would like your table to be pushed into
+- `maxFileSize` is optional parameter, default to 2^30, determines size of streams uploaded to BigQuery as files, e.g. by default 30Gb stream will be uploaded as 30 files.
 
 ## Testing
 
