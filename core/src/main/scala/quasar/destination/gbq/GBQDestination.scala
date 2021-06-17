@@ -81,7 +81,7 @@ object GBQDestination {
     val init = for {
       cfg <- EitherT(Resource.pure[F, Either[InitializationError[Json], GBQConfig]](configOrError))
       client <- EitherT(AsyncHttpClientBuilder[F].map(_.asRight[InitializationError[Json]]))
-      _ <- EitherT(Resource.liftF(isLive(client, cfg)))
+      _ <- EitherT(Resource.eval(isLive(client, cfg)))
     } yield new GBQDestination[F](client, cfg): Destination[F]
 
     init.value
