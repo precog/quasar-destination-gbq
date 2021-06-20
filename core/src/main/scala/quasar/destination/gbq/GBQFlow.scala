@@ -246,14 +246,21 @@ final class GBQFlow[F[_]: Concurrent](
       Resource.liftF(jobReq).flatMap(client.run).use { resp => {
         resp.status match {
           case Status.Ok => resp.headers match {
-            case Location(loc) => loc.uri.asRight[InitializationError[Json]].pure[F]
+            case Location(loc) =>
+              for {
+                body <- Stream.eval(resp.as[String])
+                _ <- println("!HELLO!").pure[fs2.Stream[F,*]]
+                _ <- println(body).pure[fs2.Stream[F,*]]
+              } yield ()
+              loc.uri.asRight[InitializationError[Json]].pure[F]
           }
           case _ => 
             for {
               body <- Stream.eval(resp.as[String])
               _ <- println("!HELLO!").pure[fs2.Stream[F,*]]
               _ <- println(body).pure[fs2.Stream[F,*]]
-            } yield DestinationError.malformedConfiguration((GBQDestinationModule.destinationType, jString("Reason: " + resp.status.reason), config.sanitizedJson.toString)).asLeft[Uri].pure[F]
+            } yield ()
+            DestinationError.malformedConfiguration((GBQDestinationModule.destinationType, jString("Reason: " + resp.status.reason), config.sanitizedJson.toString)).asLeft[Uri].pure[F]
         }
       }}
     })
