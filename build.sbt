@@ -16,7 +16,7 @@ ThisBuild / githubWorkflowBuildPreamble +=
     name = Some("Decrypt gcp service account json key"))
 
 val ArgonautVersion = "6.3.0-M2"
-val Http4sVersion = "0.21.13"
+val Http4sVersion = "0.21.24"
 val SpecsVersion = "4.10.5"
 val Slf4s = "1.7.25"
 val GoogleAuthLib = "0.20.0"
@@ -28,7 +28,11 @@ lazy val buildSettings = Seq(
 lazy val publishTestsSettings = Seq(
   Test / packageBin / publishArtifact := true)
 
-lazy val commonSettings = buildSettings ++ publishTestsSettings
+lazy val warningSettings = Seq(
+  addCompilerPlugin("com.github.ghik" % "silencer-plugin" % "1.7.0" cross CrossVersion.full),
+  scalacOptions += "-P:silencer:globalFilters=http4s-argonaut")
+
+lazy val commonSettings = buildSettings ++ publishTestsSettings ++ warningSettings
 
 lazy val root = project
   .in(file("."))

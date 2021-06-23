@@ -210,7 +210,7 @@ final class GBQFlow[F[_]: Concurrent](
           .withEntity(dCfg)
         }
 
-      Resource.liftF(datasetReqF).flatMap(client.run).use { resp =>
+      Resource.eval(datasetReqF).flatMap(client.run).use { resp =>
         resp.status match {
           case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
           case Status.Conflict =>
@@ -243,7 +243,7 @@ final class GBQFlow[F[_]: Concurrent](
           .withEntity(jCfg)
       }
 
-      Resource.liftF(jobReq).flatMap(client.run).use { resp =>
+      Resource.eval(jobReq).flatMap(client.run).use { resp =>
         resp.status match {
           case Status.Ok => resp.headers match {
             case Location(loc) => loc.uri.asRight[InitializationError[Json]].pure[F]
