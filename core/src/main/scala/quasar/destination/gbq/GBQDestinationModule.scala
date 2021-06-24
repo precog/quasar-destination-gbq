@@ -19,7 +19,7 @@ package quasar.destination.gbq
 import quasar.api.destination.DestinationType
 import quasar.api.destination.DestinationError.InitializationError
 import quasar.connector.destination.{Destination, DestinationModule, PushmiPullyu}
-import quasar.connector.MonadResourceErr
+import quasar.connector.{GetAuth, MonadResourceErr}
 
 import argonaut._
 
@@ -50,7 +50,8 @@ object GBQDestinationModule extends DestinationModule with Logging {
 
   def destination[F[_]: ConcurrentEffect: ContextShift: MonadResourceErr: Timer](
       config: Json,
-      pushPull: PushmiPullyu[F])
+      pushPull: PushmiPullyu[F],
+      auth: GetAuth[F])
       : Resource[F, Either[InitializationError[Json], Destination[F]]] =
     GBQDestination[F](config)
 }

@@ -380,7 +380,8 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 
   def dest(cfg: Json): Resource[IO, Destination[IO]] = {
     val pushPull: PushmiPullyu[IO] = _ => _ => Stream.empty[IO]
-    GBQDestinationModule.destination[IO](cfg, pushPull) evalMap {
+    val getAuth: GetAuth[IO] = _ => IO.pure(None)
+    GBQDestinationModule.destination[IO](cfg, pushPull, getAuth) evalMap {
       case Left(e) => IO.raiseError(new Throwable("Incorrect config"))
       case Right(a) => IO.pure(a)
     }
