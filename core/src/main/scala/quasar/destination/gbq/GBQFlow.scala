@@ -304,7 +304,20 @@ object GBQFlow {
       .intercalate(", ")
 
   private def mkColumn(c: Column[ColumnType.Scalar]): ValidatedNel[ColumnType.Scalar, GBQSchema] =
-    tblColumnToGbq(c.tpe).map(s => GBQSchema(s, c.name))
+    tblColumnToGbq(c.tpe).map(s => GBQSchema(s, hygienicIdent(c.name)))
+
+  /*
+   * From: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#TableFieldSchema
+   *
+   * The name must contain only letters (a-z, A-Z), numbers (0-9), 
+   * or underscores (_), and must start with a letter or underscore. 
+   *
+   * This regex will replace underscores with underscores, but I think I can live with that
+   */
+  private val disallowedCharacterRegex = raw"((\W))".r
+
+  private def hygienicIdent(ident: String): String = 
+    disallowedCharacterRegex.replaceAllIn(ident, "_")
 
   private def tblColumnToGbq(ct: ColumnType.Scalar): ValidatedNel[ColumnType.Scalar, String] =
     ct match {
