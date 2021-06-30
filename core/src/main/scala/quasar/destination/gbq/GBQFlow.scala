@@ -317,7 +317,7 @@ object GBQFlow {
   private val disallowedCharacterRegex = raw"((\W))".r
 
   private def hygienicIdent(ident: String): String = 
-      disallowedCharacterRegex.replaceAllIn(ident, "_")
+    disallowedCharacterRegex.replaceAllIn(ident, "_")
 
   private def tblColumnToGbq(ct: ColumnType.Scalar): ValidatedNel[ColumnType.Scalar, String] =
     ct match {
