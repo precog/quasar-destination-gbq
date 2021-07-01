@@ -39,6 +39,8 @@ import org.http4s.client._
 import org.http4s.headers.Authorization
 import org.slf4s.Logging
 
+import scalaz.{NonEmptyList => ZNel}
+
 import scala.{
   Either,
   StringContext,
@@ -102,10 +104,10 @@ object GBQDestination {
         client.run(request).use { resp =>
           resp.status match {
             case Status.Ok => ().asRight[InitializationError[Json]].pure[F]
-            case _ => DestinationError.malformedConfiguration((
+            case _ => DestinationError.invalidConfiguration((
               GBQDestinationModule.destinationType,
-              jString(resp.status.reason),
-              config.sanitizedJson.toString)).asLeft[Unit].pure[F]
+              config.sanitizedJson,
+              ZNel(resp.status.reason))).asLeft[Unit].pure[F]
           }
         }
       })

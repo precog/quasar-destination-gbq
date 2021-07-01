@@ -251,16 +251,17 @@ final class GBQFlow[F[_]: Concurrent](
         resp.status match {
           case Status.Ok => resp.headers match {
             case Location(loc) => 
-              Sync[F].delay(log.info(s"Successfully initialised the job under URI '${loc.uri}'"))
+              Sync[F].delay(log.debug(s"Successfully initialised job."))
                 .as(loc.uri.asRight[InitializationError[Json]])
           }
           case otherStatus =>  
             resp.attemptAs[String].fold(
                 _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and no body")),
-                body => Sync[F].delay(log.error(s"GBQ job creationg failed with status '$otherStatus': $body")))
-              .as(DestinationError.malformedConfiguration(
-                (GBQDestinationModule.destinationType, jString("Reason: " + resp.status.reason),
-                config.sanitizedJson.toString)).asLeft[Uri])
+                body => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus': $body")))
+              .as(DestinationError.invalidConfiguration(
+                (GBQDestinationModule.destinationType, 
+                  config.sanitizedJson,
+                  ZNEList("Reason: " + resp.status.reason))).asLeft[Uri])
 
             
         }
