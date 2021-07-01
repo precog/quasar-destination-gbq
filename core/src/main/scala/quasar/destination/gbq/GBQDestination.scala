@@ -107,7 +107,7 @@ object GBQDestination {
             case _ => DestinationError.invalidConfiguration((
               GBQDestinationModule.destinationType,
               config.sanitizedJson,
-              ZNel(resp.status.reason))).asLeft[Unit].pure[F]
+              ZNel(s"Dataset liveness check failed: ${resp.status.reason}"))).asLeft[Unit].pure[F]
           }
         }
       })

@@ -261,7 +261,7 @@ final class GBQFlow[F[_]: Concurrent](
               .as(DestinationError.invalidConfiguration(
                 (GBQDestinationModule.destinationType, 
                   config.sanitizedJson,
-                  ZNEList("Reason: " + resp.status.reason))).asLeft[Uri])
+                  ZNEList(s"Error creating GBQ job: ${resp.status.reason}"))).asLeft[Uri])
 
             
         }
