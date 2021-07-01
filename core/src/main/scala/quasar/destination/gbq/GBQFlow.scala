@@ -34,7 +34,6 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 
 import fs2.{Pipe, Stream}
-import cats.effect._
 
 import org.http4s.{
   AuthScheme,
@@ -51,9 +50,13 @@ import org.http4s.client._
 import org.http4s.Header
 import org.http4s.headers.{Authorization, `Content-Type`, Location}
 
+import org.slf4s.Logging
+
 import scalaz.{NonEmptyList => ZNEList}
+
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 import com.google.auth.oauth2.AccessToken
 
 final class GBQFlow[F[_]: Concurrent](
@@ -63,7 +66,8 @@ final class GBQFlow[F[_]: Concurrent](
     config: GBQConfig,
     client: Client[F],
     refMode: Ref[F, WriteMode])
-    extends Flow[F] {
+    extends Flow[F] 
+    with Logging {
 
   private def credsF =
     tokenF map { token =>
@@ -246,11 +250,20 @@ final class GBQFlow[F[_]: Concurrent](
       Resource.eval(jobReq).flatMap(client.run).use { resp =>
         resp.status match {
           case Status.Ok => resp.headers match {
-            case Location(loc) => loc.uri.asRight[InitializationError[Json]].pure[F]
+            case Location(loc) => 
+              Sync[F].delay(log.debug(s"Successfully initialised job."))
+                .as(loc.uri.asRight[InitializationError[Json]])
           }
-          case _ =>  DestinationError.malformedConfiguration(
-            (GBQDestinationModule.destinationType, jString("Reason: " + resp.status.reason),
-            config.sanitizedJson.toString)).asLeft[Uri].pure[F]
+          case otherStatus =>  
+            resp.attemptAs[String].fold(
+                _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and no body")),
+                body => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus': $body")))
+              .as(DestinationError.invalidConfiguration(
+                (GBQDestinationModule.destinationType, 
+                  config.sanitizedJson,
+                  ZNEList(s"Error creating GBQ job: ${resp.status.reason}"))).asLeft[Uri])
+
+            
         }
       }
     })
