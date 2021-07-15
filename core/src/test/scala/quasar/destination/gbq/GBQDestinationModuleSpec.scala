@@ -24,7 +24,7 @@ import quasar.api.destination.DestinationError
 import quasar.api.destination.DestinationType
 import quasar.connector.destination.{Destination, PushmiPullyu}
 import quasar.api.destination.DestinationError.InitializationError
-import quasar.connector.ResourceError
+import quasar.connector.{GetAuth, ResourceError}
 import quasar.contrib.scalaz.MonadError_
 
 import argonaut._, Argonaut._
@@ -78,7 +78,8 @@ object GBQDestinationModuleSpec extends EffectfulQSpec[IO] {
 
   def dest[A](cfg: Json)(f: Either[InitializationError[Json], Destination[IO]] => IO[A]): IO[A] = {
     val pushPull: PushmiPullyu[IO] = _ => _ => Stream.empty[IO]
+    val getAuth: GetAuth[IO] = _ => IO.pure(None)
 
-    GBQDestinationModule.destination[IO](cfg, pushPull).use(f)
+    GBQDestinationModule.destination[IO](cfg, pushPull, getAuth).use(f)
   }
 }
