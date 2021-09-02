@@ -255,7 +255,7 @@ final class GBQFlow[F[_]: Concurrent](
                 .as(loc.uri.asRight[InitializationError[Json]])
           }
           case otherStatus =>  
-            resp.attemptAs[String].fold(
+            resp.attemptAs[String].foldF(
                 _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and no body")),
                 body => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus': $body")))
               .as(DestinationError.invalidConfiguration(
