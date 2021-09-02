@@ -58,6 +58,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 import com.google.auth.oauth2.AccessToken
+import fs2.Pull
 
 final class GBQFlow[F[_]: Concurrent](
     name: String,
@@ -84,19 +85,16 @@ final class GBQFlow[F[_]: Concurrent](
     GBQAccessToken.token(config.serviceAccountAuthBytes)
 
   def ingest: Pipe[F, Byte, Unit] = { (bytes: Stream[F, Byte]) =>
+
+    val uploadUri = for {
+      mode <- refMode.get
+      jobConfig = formGBQJobConfig(schema, config, name, mode)
+      _ <- mkDataset.whenA(mode === WriteMode.Replace)
+      eloc <- mkGbqJob(jobConfig)
+    } yield eloc
+
     for {
-      eitherloc <- Stream.eval {
-        for {
-          mode <- refMode.get
-          jobConfig = formGBQJobConfig(schema, config, name, mode)
-          _ <- mkDataset.whenA(mode === WriteMode.Replace)
-          eloc <- mkGbqJob(jobConfig)
-        } yield eloc
-      }
-      _ <- eitherloc match {
-        case Right(locationUri) => upload(bytes, locationUri)
-        case Left(e) => Stream.raiseError[F](new RuntimeException(s"No Location URL returned from job: $e"))
-      }
+      _ <- upload(bytes, uploadUri)
       _ <- Stream.eval(refMode.set(WriteMode.Append))
     } yield ()
   }
@@ -269,18 +267,40 @@ final class GBQFlow[F[_]: Concurrent](
     })
   }
 
-  private def upload(bytes: Stream[F, Byte], uploadLocation: Uri): Stream[F, Unit] = {
-    val destReq = Request[F](Method.PUT, uploadLocation)
-        .putHeaders(Header("Host", "www.googleapis.com"))
-        .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
-        .withEntity(bytes)
-    client.stream(destReq) evalMap { resp =>
-      resp.status match {
-        case Status.Ok => ().pure[F]
-        case _ => ApplicativeError[F, Throwable].raiseError[Unit](
-            new RuntimeException(s"Upload failed: ${resp.status.reason}" ))
-      }
-    }
+  private def upload(bytes: Stream[F, Byte], uploadLocation: F[Either[InitializationError[Json], Uri]]): Stream[F, Unit] = {
+
+    bytes.pull.uncons.flatMap {
+      case None => 
+        Pull.done
+      case Some((firstChunk, restOfStream)) => 
+        Pull.eval(uploadLocation).flatMap {
+          case Left(error) => 
+            Pull.raiseError[F](new RuntimeException(s"No Location URL returned from job: $error"))
+            
+          case Right(uri) =>
+
+            val entity = (Stream.chunk(firstChunk) ++ restOfStream)
+
+            val destReq = Request[F](Method.PUT, uri)
+                .putHeaders(Header("Host", "www.googleapis.com"))
+                .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
+                .withEntity(entity)
+
+            val uploadStream = client.stream(destReq) evalMap { resp =>
+              resp.status match {
+                case Status.Ok => ().pure[F]
+                case _ => ApplicativeError[F, Throwable].raiseError[Unit](
+                    new RuntimeException(s"Upload failed: ${resp.status.reason}" ))
+              }
+            }
+
+            uploadStream.pull.echo
+
+        }
+        
+    }.stream
+
+
   }
 }
 
