@@ -162,13 +162,13 @@ final class GBQFlow[F[_]: Concurrent](
         for {
           req <- Stream.eval(reqF)
           resp <- client.stream(req)
-          body <- Stream.eval(resp.as[String])
+          responseAsString <- Stream.eval(resp.as[String])
           _ <- resp.status match {
             case Status.Ok =>
               ().pure[Stream[F, *]]
             case x =>
               Stream.raiseError[F](new RuntimeException(
-                s"An error occured during existing ids filtering. status: $x, response: $body"))
+                s"An error occured during existing ids filtering. status: $x, response: $responseAsString"))
           }
         } yield ()
     }
@@ -256,8 +256,8 @@ final class GBQFlow[F[_]: Concurrent](
           }
           case otherStatus =>  
             resp.attemptAs[String].foldF(
-                _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and no body")),
-                body => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus': $body")))
+                _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and failed to decode response: ${err.message}")),
+                response => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and response: $response")))
               .as(DestinationError.invalidConfiguration(
                 (GBQDestinationModule.destinationType, 
                   config.sanitizedJson,
