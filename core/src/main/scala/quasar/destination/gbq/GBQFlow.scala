@@ -256,7 +256,7 @@ final class GBQFlow[F[_]: Concurrent](
           }
           case otherStatus =>  
             resp.attemptAs[String].foldF(
-                _ => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and failed to decode response: ${err.message}")),
+                err => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and failed to decode response: ${err.message}")),
                 response => Sync[F].delay(log.error(s"GBQ job creation failed with status '$otherStatus' and response: $response")))
               .as(DestinationError.invalidConfiguration(
                 (GBQDestinationModule.destinationType, 
