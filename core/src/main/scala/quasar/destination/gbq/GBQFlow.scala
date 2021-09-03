@@ -269,22 +269,20 @@ final class GBQFlow[F[_]: Concurrent](
 
   private def upload(bytes: Stream[F, Byte], uploadLocation: F[Either[InitializationError[Json], Uri]]): Stream[F, Unit] = {
 
-    bytes.pull.uncons.flatMap {
+    bytes.pull.peek.flatMap {
       case None => 
         Pull.done
-      case Some((firstChunk, restOfStream)) => 
+      case Some((_, data)) => 
         Pull.eval(uploadLocation).flatMap {
           case Left(error) => 
             Pull.raiseError[F](new RuntimeException(s"No Location URL returned from job: $error"))
             
           case Right(uri) =>
 
-            val entity = (Stream.chunk(firstChunk) ++ restOfStream)
-
             val destReq = Request[F](Method.PUT, uri)
                 .putHeaders(Header("Host", "www.googleapis.com"))
                 .withContentType(`Content-Type`(MediaType.application.`x-www-form-urlencoded`))
-                .withEntity(entity)
+                .withEntity(data)
 
             val uploadStream = client.stream(destReq) evalMap { resp =>
               resp.status match {
