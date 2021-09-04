@@ -111,7 +111,7 @@ final class GBQFlow[F[_]: Concurrent](
 
     def mkIn(strs: Array[String]): String = {
       if (strs.isEmpty) ""
-      else s"${col.name} IN (${strs.mkString(", ")})"
+      else s"`${col.name}` IN (${strs.mkString(", ")})"
     }
 
     // We group ids into 64 sized batches like
@@ -136,7 +136,7 @@ final class GBQFlow[F[_]: Concurrent](
       ().pure[Stream[F, *]]
     } else {
       val query =
-        s"DELETE FROM ${config.authCfg.projectId}.${config.datasetId}.$name WHERE $grouped"
+        s"DELETE FROM `${config.authCfg.projectId}.${config.datasetId}.$name` WHERE $grouped"
 
       val qConfig = QueryJobConfig(query, 6L * 3600L * 1000L)
 
