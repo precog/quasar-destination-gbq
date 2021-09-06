@@ -103,7 +103,7 @@ final class GBQFlow[F[_]: Concurrent](
 
   def delete(ids: IdBatch): Stream[F, Unit] = idColumn traverse_ { (col: Column[_]) =>
     val strs: Array[String] = ids match {
-      case IdBatch.Strings(values, size) => values.take(size).map(x => "\"" + x + "\"")
+      case IdBatch.Strings(values, size) => values.take(size).map(strId => "\"" + strId + "\"")
       case IdBatch.Longs(values, size) => values.take(size).map(_.toString)
       case IdBatch.Doubles(values, size) => values.take(size).map(_.toString)
       case IdBatch.BigDecimals(values, size) => values.take(size).map(_.toString)
@@ -118,18 +118,7 @@ final class GBQFlow[F[_]: Concurrent](
     // foo in (a0...a63) or foo in (a64...a127)
     // because there is definitely a limit for `IN` sentence and
     // it's definitely more than 64.
-    def group(ix: Int, accum: List[String]): String = {
-      val nextIx = ix + 64
-      val taken = strs.slice(ix, nextIx)
-      val in = mkIn(taken)
-      val nextAccum = in :: accum
-      if (nextIx > ids.size + 1)
-        nextAccum.mkString(" OR ")
-      else
-        group(nextIx, nextAccum)
-    }
-
-    val grouped = group(0, List())
+    val grouped = strs.grouped(64).map(mkIn).mkString(" OR ")
 
     if (grouped.isEmpty) {
       // Nothing to delete
