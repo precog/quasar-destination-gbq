@@ -277,7 +277,7 @@ final class GBQFlow[F[_]: Concurrent: Timer](
         resp.status match {
           case Status.Ok => resp.as[GBQJob]
           case _         => ApplicativeError[F, Throwable].raiseError[GBQJob](
-                              new RuntimeException(s"getJobStatus failed: ${resp.status.reason}" )
+                              new RuntimeException(s"getJobStatus failed: ${resp.status.reason}. Check job manually with jobId: ${job.id}" )
                             )
         }
       }
@@ -344,7 +344,7 @@ final class GBQFlow[F[_]: Concurrent: Timer](
             }
 
             uploadStream.pull.echo >> 
-            checkJobStatus(job, 5.seconds, 3, 0).pull.echo
+            checkJobStatus(job, config.timeOut, config.maxRetries, 0).pull.echo
         }
     }.stream
   }

@@ -17,7 +17,9 @@ libraryDependencies += "com.precog" %% "quasar-destination-gbq" % <version>
   "config": {
     "authCfg": <service-account-json-auth-file-contents>,
     "datasetId": <dataset-name>,
-    "maxFileSize": Number?
+    "maxFileSize": Number?,
+    "timeOutSeconds": Number?,
+    "maxRetryAttempts": Number?
   }
 }
 ```
