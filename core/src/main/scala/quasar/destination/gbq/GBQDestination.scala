@@ -25,7 +25,7 @@ import quasar.connector.destination.{Destination, LegacyDestination, ResultSink}
 import argonaut._, Argonaut._
 
 import cats.data.{EitherT, NonEmptyList}
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource}
+import cats.effect.{Concurrent, Timer, ConcurrentEffect, ContextShift, Resource}
 import cats.implicits._
 
 import org.http4s.{
@@ -50,7 +50,7 @@ import scala.{
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect] private (
+class GBQDestination[F[_]: Concurrent: ContextShift: Timer: MonadResourceErr: ConcurrentEffect] private (
     client: Client[F],
     config: GBQConfig)
     extends LegacyDestination[F]
@@ -71,7 +71,7 @@ class GBQDestination[F[_]: Concurrent: ContextShift: MonadResourceErr: Concurren
 object GBQDestination {
   val DefaultMaxFileSize = 1024L * 1024L * 1024L
 
-  def apply[F[_]: Concurrent: ContextShift: MonadResourceErr: ConcurrentEffect](config: Json)
+  def apply[F[_]: Concurrent: ContextShift: Timer: MonadResourceErr: ConcurrentEffect](config: Json)
       : Resource[F, Either[InitializationError[Json], Destination[F]]] = {
 
     val configOrError = config.as[GBQConfig].toEither.leftMap {
