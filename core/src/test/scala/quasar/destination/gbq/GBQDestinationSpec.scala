@@ -61,10 +61,10 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.Executors
 import java.util.UUID
 
-import org.specs2.matcher.MatchResult
+//import org.specs2.matcher.MatchResult
 
 import shims._
-import shapeless.PolyDefns.identity
+//import shapeless.PolyDefns.identity
 import skolems.∀
 
 object GBQDestinationSpec extends EffectfulQSpec[IO] {
@@ -142,73 +142,73 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
   }
 
   "bigquery upload" should {
-    "create sink successfully uploads table" >> {
-      val data =
-        Stream(
-          Chunk.array("col1,false\r\n".getBytes),
-          Chunk.array("stuff,true\r\n".getBytes))
-        .flatMap(Stream.chunk(_))
-
-      def check(f: GBQConfig => GBQConfig): IO[MatchResult[Boolean]] = {
-        for {
-          (config0, tableName) <- configAndTableF
-          config = f(config0)
-          path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
-          req = csv(config.asJson).use { consume =>
-            data
-              .through(consume(
-                path,
-                NonEmptyList.of(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))))
-              .compile.drain
-          }
-          consumedR <- req.attempt
-          _ <- waitABit
-
-          accessToken <- GBQAccessToken.token[IO](config.serviceAccountAuthBytes)
-          auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
-
-          datasetReq = Request[IO](
-            method = Method.GET,
-            uri = Uri.fromString(UriRoot)
-              .getOrElse(Uri()))
-              .withHeaders(auth)
-          datasetResp <- httpClient.run(datasetReq) use {
-            case Status.Successful(r) => r.as[String]
-            case r => IO.raiseError(new Throwable("Dataset request failed"))
-          }
-          _ <- waitABit
-
-          tableReq = Request[IO](
-            method = Method.GET,
-            uri = Uri.fromString(s"$UriRoot/${config.datasetId}/tables")
-              .getOrElse(Uri()))
-              .withHeaders(auth)
-          tableResp <- httpClient.run(tableReq).use {
-            case Status.Successful(r) => r.as[String]
-            case r => IO.raiseError(new Throwable("Table request failed"))
-          }
-          _ <- waitABit
-
-
-          contentResponse <- getContent[String](config.datasetId, tableName, auth)
-          _ <- waitABit
-
-          deleted <- deleteDataset(config.datasetId, auth)
-
-        } yield {
-          deleted must beTrue
-          consumedR must beRight(())
-          datasetResp.contains(config.datasetId) must beTrue
-          tableResp.contains(tableName) must beTrue
-          contentResponse.contains("stuff") must beTrue
-          contentResponse.contains("true") must beTrue
-          contentResponse.contains("false") must beTrue
-          contentResponse.contains("col1") must beTrue
-        }
-      }
-      //"default (1GB) max file size" >>* check(identity)
-      //"0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
-    }
+//    "create sink successfully uploads table" >> {
+//      val data =
+//        Stream(
+//          Chunk.array("col1,false\r\n".getBytes),
+//          Chunk.array("stuff,true\r\n".getBytes))
+//        .flatMap(Stream.chunk(_))
+//
+//      def check(f: GBQConfig => GBQConfig): IO[MatchResult[Boolean]] = {
+//        for {
+//          (config0, tableName) <- configAndTableF
+//          config = f(config0)
+//          path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
+//          req = csv(config.asJson).use { consume =>
+//            data
+//              .through(consume(
+//                path,
+//                NonEmptyList.of(Column("a", ColumnType.String), Column("b", ColumnType.Boolean))))
+//              .compile.drain
+//          }
+//          consumedR <- req.attempt
+//          _ <- waitABit
+//
+//          accessToken <- GBQAccessToken.token[IO](config.serviceAccountAuthBytes)
+//          auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
+//
+//          datasetReq = Request[IO](
+//            method = Method.GET,
+//            uri = Uri.fromString(UriRoot)
+//              .getOrElse(Uri()))
+//              .withHeaders(auth)
+//          datasetResp <- httpClient.run(datasetReq) use {
+//            case Status.Successful(r) => r.as[String]
+//            case r => IO.raiseError(new Throwable("Dataset request failed"))
+//          }
+//          _ <- waitABit
+//
+//          tableReq = Request[IO](
+//            method = Method.GET,
+//            uri = Uri.fromString(s"$UriRoot/${config.datasetId}/tables")
+//              .getOrElse(Uri()))
+//              .withHeaders(auth)
+//          tableResp <- httpClient.run(tableReq).use {
+//            case Status.Successful(r) => r.as[String]
+//            case r => IO.raiseError(new Throwable("Table request failed"))
+//          }
+//          _ <- waitABit
+//
+//
+//          contentResponse <- getContent[String](config.datasetId, tableName, auth)
+//          _ <- waitABit
+//
+//          deleted <- deleteDataset(config.datasetId, auth)
+//
+//        } yield {
+//          deleted must beTrue
+//          consumedR must beRight(())
+//          datasetResp.contains(config.datasetId) must beTrue
+//          tableResp.contains(tableName) must beTrue
+//          contentResponse.contains("stuff") must beTrue
+//          contentResponse.contains("true") must beTrue
+//          contentResponse.contains("false") must beTrue
+//          contentResponse.contains("col1") must beTrue
+//        }
+//      }
+//      "default (1GB) max file size" >>* check(identity)
+//      "0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
+//    }
     "append sink upload tables and append data" >>* {
       val data0: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
         DataEvent.Create(Chunk.array("a,1\r\n".getBytes)),
