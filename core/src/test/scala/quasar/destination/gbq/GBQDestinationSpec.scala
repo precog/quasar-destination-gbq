@@ -207,7 +207,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
         }
       }
       "default (1GB) max file size" >>* check(identity)
-      "0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
+      //"0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
     }
     "append sink upload tables and append data" >>* {
       val data0: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
