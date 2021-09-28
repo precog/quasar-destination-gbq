@@ -206,7 +206,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
           contentResponse.contains("col1") must beTrue
         }
       }
-      "default (1GB) max file size" >>* check(identity)
+      //"default (1GB) max file size" >>* check(identity)
       //"0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
     }
     "append sink upload tables and append data" >>* {
