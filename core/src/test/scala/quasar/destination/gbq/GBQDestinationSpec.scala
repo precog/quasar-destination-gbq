@@ -19,10 +19,10 @@ package quasar.destination.gbq
 import slamdata.Predef._
 
 import quasar.api.{Column, ColumnType}
-import quasar.api.push.OffsetKey
+import quasar.api.push.{OffsetKey, PushColumns}
 import quasar.connector._
-import quasar.connector.destination.{Destination, PushmiPullyu, ResultSink}, ResultSink.{AppendSink, UpsertSink}
-import quasar.api.resource.ResourcePath
+import quasar.connector.destination.{Destination, PushmiPullyu, ResultSink, WriteMode}, ResultSink.{AppendSink, UpsertSink}
+import quasar.api.resource.{ResourceName, ResourcePath}
 import quasar.connector.ResourceError
 import quasar.contrib.scalaz.MonadError_
 import quasar.EffectfulQSpec
@@ -32,18 +32,22 @@ import argonaut._, Argonaut._
 import cats.data.NonEmptyList
 import cats.effect.{Blocker, IO, Timer, Resource}
 
-import fs2.{Pipe, Stream}
+import fs2.{Pipe, Stream, Chunk}
 
 import org.http4s.argonaut.jsonOf
 import org.http4s.client._
 import org.http4s.{
   Header,
+  AuthScheme,
+  Credentials,
   Method,
   Request,
   Status,
   Uri,
   EntityDecoder
 }
+import org.http4s.headers.Authorization
+
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -205,62 +209,62 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
 //      "default (1GB) max file size" >>* check(identity)
 //      "0 max file size (one file per row)" >>* check(_.copy(maxFileSize = Some(0L)))
 //    }
-  //   "append sink upload tables and append data" >>* {
-  //     val data0: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
-  //       DataEvent.Create(Chunk.array("a,1\r\n".getBytes)),
-  //       DataEvent.Create(Chunk.array("b,2\r\nc,3\r\n".getBytes)),
-  //       DataEvent.Commit(OffsetKey.Actual.string("commit0")))
+    "append sink upload tables and append data" >>* {
+      val data0: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
+        DataEvent.Create(Chunk.array("a,1\r\n".getBytes)),
+        DataEvent.Create(Chunk.array("b,2\r\nc,3\r\n".getBytes)),
+        DataEvent.Commit(OffsetKey.Actual.string("commit0")))
 
-  //     val data1: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
-  //       DataEvent.Create(Chunk.array("d,4\r\n".getBytes)),
-  //       DataEvent.Commit(OffsetKey.Actual.string("commit1")),
-  //       DataEvent.Create(Chunk.array("e,5\r\n".getBytes)),
-  //       DataEvent.Commit(OffsetKey.Actual.string("commit2")))
+      val data1: Stream[IO, AppendEvent[Byte, OffsetKey.Actual[String]]] = Stream(
+        DataEvent.Create(Chunk.array("d,4\r\n".getBytes)),
+        DataEvent.Commit(OffsetKey.Actual.string("commit1")),
+        DataEvent.Create(Chunk.array("e,5\r\n".getBytes)),
+        DataEvent.Commit(OffsetKey.Actual.string("commit2")))
 
-  //     val columns = PushColumns.NoPrimary(NonEmptyList.of(
-  //       Column("tag", ColumnType.String),
-  //       Column("value", ColumnType.Number)))
+      val columns = PushColumns.NoPrimary(NonEmptyList.of(
+        Column("tag", ColumnType.String),
+        Column("value", ColumnType.Number)))
 
-  //     for {
-  //       (config, tableName) <- configAndTableF
-  //       path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
-  //       args = AppendSink.Args(path, columns, WriteMode.Replace)
-  //       accessToken <- GBQAccessToken.token[IO](config.serviceAccountAuthBytes)
-  //       auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
+      for {
+        (config, tableName) <- configAndTableF
+        path = ResourcePath.root() / ResourceName(tableName) / ResourceName("bar.csv")
+        args = AppendSink.Args(path, columns, WriteMode.Replace)
+        accessToken <- GBQAccessToken.token[IO](config.serviceAccountAuthBytes)
+        auth = Authorization(Credentials.Token(AuthScheme.Bearer, accessToken.getTokenValue))
 
-  //       r <- append(config.asJson).use { mkConsumer =>
-  //         for {
-  //           res0 <- data0.through(mkConsumer(args).apply[String]).compile.toList
-  //           _ <- waitABit
+        r <- append(config.asJson).use { mkConsumer =>
+          for {
+            res0 <- data0.through(mkConsumer(args).apply[String]).compile.toList
+            _ <- waitABit
 
-  //           rows0 <- getContent[Rows](config.datasetId, tableName, auth)
+            rows0 <- getContent[Rows](config.datasetId, tableName, auth)
 
-  //           res1 <- data1.through(mkConsumer(args.copy(writeMode = WriteMode.Append)).apply[String])
-  //             .compile.toList
-  //           _ <- waitABit
+            res1 <- data1.through(mkConsumer(args.copy(writeMode = WriteMode.Append)).apply[String])
+              .compile.toList
+            _ <- waitABit
 
-  //           rows1 <- getContent[Rows](config.datasetId, tableName, auth)
+            rows1 <- getContent[Rows](config.datasetId, tableName, auth)
 
-  //           _ <- deleteDataset(config.datasetId, auth)
+            _ <- deleteDataset(config.datasetId, auth)
 
-  //         } yield {
-  //           val rowsExpected0 = List(
-  //             Row("a", 1),
-  //             Row("b", 2),
-  //             Row("c", 3))
+          } yield {
+            val rowsExpected0 = List(
+              Row("a", 1),
+              Row("b", 2),
+              Row("c", 3))
 
-  //           val rowsExpected1 = rowsExpected0 ++ List(
-  //             Row("d", 4),
-  //             Row("e", 5))
+            val rowsExpected1 = rowsExpected0 ++ List(
+              Row("d", 4),
+              Row("e", 5))
 
-  //           rows0 must_=== Rows(rowsExpected0)
-  //           rows1 must_=== Rows(rowsExpected1)
-  //           res0 must_=== List(OffsetKey.Actual.string("commit0"))
-  //           res1 must_=== List(OffsetKey.Actual.string("commit1"), OffsetKey.Actual.string("commit2"))
-  //         }
-  //       }
-  //     } yield r
-  //   }
+            rows0 must_=== Rows(rowsExpected0)
+            rows1 must_=== Rows(rowsExpected1)
+            res0 must_=== List(OffsetKey.Actual.string("commit0"))
+            res1 must_=== List(OffsetKey.Actual.string("commit1"), OffsetKey.Actual.string("commit2"))
+          }
+        }
+      } yield r
+    }
 
   //   "upsert sink upload tables and upsert data" >>* {
   //     val data0: Stream[IO, DataEvent[Byte, OffsetKey.Actual[String]]] = Stream(
