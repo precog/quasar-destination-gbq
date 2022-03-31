@@ -16,7 +16,7 @@ ThisBuild / githubWorkflowBuildPreamble +=
     name = Some("Decrypt gcp service account json key"))
 
 val ArgonautVersion = "6.3.0-M2"
-val Http4sVersion = "0.21.33"
+val Http4sVersion = "0.21.24"
 val SpecsVersion = "4.10.5"
 val Slf4s = "1.7.25"
 val GoogleAuthLib = "0.20.0"
