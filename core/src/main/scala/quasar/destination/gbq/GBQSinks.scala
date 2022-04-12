@@ -44,7 +44,7 @@ trait GBQSinks[F[_]] {
   def maxFileSize: Long
 
   def render: RenderConfig[Byte] =
-    RenderConfig.Csv(includeHeader = false, numericScale = 9.some)
+    RenderConfig.Csv(includeHeader = false, numericScale = 9.some, includeBom = false)
 
   def flowSinks(implicit F: Concurrent[F]): NonEmptyList[ResultSink[F, ColumnType.Scalar]] =
     NonEmptyList.of(ResultSink.create(create), ResultSink.upsert(upsert), ResultSink.append(append))
