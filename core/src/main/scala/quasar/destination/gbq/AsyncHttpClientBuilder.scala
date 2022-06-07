@@ -32,7 +32,6 @@ import org.slf4s.Logging
 
 import scala.{
   StringContext,
-  Int,
   List,
   Option
 }
@@ -46,7 +45,7 @@ object AsyncHttpClientBuilder extends Logging {
   def apply[F[_]](implicit F: ConcurrentEffect[F]): Resource[F, Client[F]] =
     for {
       selector <- Resource.eval(Search[F])
-      _ <- Resource.eval(F.delay(log.debug("AsyncHttpClientBuilder with bumped timeouts")))
+      _ <- Resource.eval(F.delay(log.debug("AsyncHttpClientBuilder with timeouts 0")))
       c <- AsyncHttpClient.resource(mkConfig(selector))
     } yield c
 
@@ -54,16 +53,16 @@ object AsyncHttpClientBuilder extends Logging {
     new DefaultAsyncHttpClientConfig.Builder()
       .setMaxConnectionsPerHost(200)
       .setMaxConnections(400)
-      .setRequestTimeout(Int.MaxValue)
-      .setShutdownTimeout(Int.MaxValue)
-      .setReadTimeout(Int.MaxValue)
-      .setConnectTimeout(Int.MaxValue)
-      .setPooledConnectionIdleTimeout(Int.MaxValue)
-      //.setAcquireFreeChannelTimeout(Int.MaxValue)
-      .setHandshakeTimeout(Int.MaxValue)
-      //.setSslSessionTimeout(Integer.valueOf(Int.MaxValue))
+      .setRequestTimeout(0)
+      .setShutdownTimeout(0)
+      .setReadTimeout(0)
+      .setConnectTimeout(0)
+      .setPooledConnectionIdleTimeout(0)
+      .setAcquireFreeChannelTimeout(0)
+      .setHandshakeTimeout(0)
+      .setSslSessionTimeout(java.lang.Integer.valueOf(0))
       .setKeepAlive(true)
-      //.setConnectionTtl(-1)
+      .setConnectionTtl(-1)
       .setProxyServerSelector(ProxyVoleProxyServerSelector(proxySelector))
       .setThreadFactory(NamedDaemonThreadFactory("http4s-async-http-client-worker"))
       .build()
