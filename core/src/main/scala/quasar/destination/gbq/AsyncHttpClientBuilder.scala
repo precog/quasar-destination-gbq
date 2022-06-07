@@ -43,9 +43,12 @@ import java.net.Proxy
 import java.net.Proxy.{Type => ProxyType}
 
 object AsyncHttpClientBuilder extends Logging {
-  def apply[F[_]: ConcurrentEffect]: Resource[F, Client[F]] =
-    Resource.eval(Search[F]).flatMap(selector =>
-      AsyncHttpClient.resource(mkConfig(selector)))
+  def apply[F[_]](implicit F: ConcurrentEffect[F]): Resource[F, Client[F]] =
+    for {
+      selector <- Resource.eval(Search[F])
+      _ <- Resource.eval(F.delay(log.debug("AsyncHttpClientBuilder with bumped timeouts")))
+      c <- AsyncHttpClient.resource(mkConfig(selector))
+    } yield c
 
   def mkConfig[F[_]](proxySelector: ProxySelector): AsyncHttpClientConfig =
     new DefaultAsyncHttpClientConfig.Builder()
