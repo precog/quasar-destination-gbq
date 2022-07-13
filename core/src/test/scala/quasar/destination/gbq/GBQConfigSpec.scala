@@ -66,7 +66,9 @@ object GBQConfigSpec extends Specification {
       clientEmail = CLIENT_EMAIL,
       accountType = ACCOUNT_TYPE),
     datasetId = DATASET,
-    maxFileSize = None)
+    maxFileSize = None,
+    timeOutSeconds = None,
+    maxRetryAttempts = None)
 
   "decode json config to GBQConfig" >> {
     decode(jsonGbqCfg).toOption must beSome(testGbqCfg)

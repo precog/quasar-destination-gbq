@@ -24,12 +24,25 @@ import cats.implicits._
 
 import scala.util.Either
 import java.net.{URI, URISyntaxException}
+import scala.concurrent.duration._
 
 final case class GBQConfig(
     authCfg: ServiceAccountConfig,
     datasetId: String,
-    maxFileSize: Option[Long]) {
+    maxFileSize: Option[Long],
+    timeOutSeconds: Option[Int],
+    maxRetryAttempts: Option[Int]
+    ) {
   import GBQConfig._
+
+  val timeOut: FiniteDuration = 
+    timeOutSeconds
+      .map(_.seconds)
+      .getOrElse(DefaultTimeout)
+
+  val maxRetries: Int = 
+    maxRetryAttempts.getOrElse(DefaultMaxRetries)
+
   val serviceAccountAuthBytes: Array[Byte] = authCfg.asJson.toString.getBytes("UTF-8")
 
   def sanitizedJson: Json =
@@ -49,7 +62,13 @@ final case class ServiceAccountConfig(
   accountType: String)
 
 object GBQConfig {
+
+
   val Redacted: String = "<REDACTED>"
+
+  val DefaultTimeout = 5.seconds
+
+  val DefaultMaxRetries = 3
 
   implicit val uriCodecJson: CodecJson[URI] =
     CodecJson(
@@ -110,6 +129,8 @@ object GBQConfig {
     ("authCfg" := cfg.authCfg) ->:
     ("datasetId" := cfg.datasetId) ->:
     ("maxFileSize" :=? cfg.maxFileSize) ->?:
+    ("timeOutSeconds" :=? cfg.timeOutSeconds) ->?:
+    ("maxRetryAttempts" :=? cfg.maxRetryAttempts) ->?:
     jEmptyObject
   }
 
@@ -118,7 +139,9 @@ object GBQConfig {
       authCfg <- (c --\ "authCfg").as[ServiceAccountConfig]
       datasetId <- (c --\ "datasetId").as[String]
       maxFileSize <- (c --\ "maxFileSize").as[Option[Long]]
-    } yield GBQConfig(authCfg, datasetId, maxFileSize)
+      timeOutSeconds<- (c --\ "timeOutSeconds").as[Option[Int]]
+      maxRetryAttempts <- (c --\ "maxRetryAttempts").as[Option[Int]]
+    } yield GBQConfig(authCfg, datasetId, maxFileSize, timeOutSeconds, maxRetryAttempts)
 
   }
 }

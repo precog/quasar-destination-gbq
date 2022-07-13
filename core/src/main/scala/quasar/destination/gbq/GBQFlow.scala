@@ -29,7 +29,7 @@ import argonaut._, Argonaut._
 
 import cats.ApplicativeError
 import cats.data.{ValidatedNel, NonEmptyList}
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, Timer, Resource, Sync}
 import cats.effect.concurrent.Ref
 import cats.implicits._
 
@@ -39,6 +39,7 @@ import org.http4s.{
   AuthScheme,
   Credentials,
   EntityEncoder,
+  EntityDecoder,
   MediaType,
   Method,
   Request,
@@ -46,8 +47,10 @@ import org.http4s.{
   Uri
 }
 import org.http4s.argonaut.jsonEncoderOf
+import org.http4s.argonaut.jsonOf
 import org.http4s.client._
 import org.http4s.Header
+import scala.concurrent.duration._
 import org.http4s.headers.{Authorization, `Content-Type`, Location}
 
 import org.slf4s.Logging
@@ -60,7 +63,7 @@ import java.nio.charset.StandardCharsets
 import com.google.auth.oauth2.AccessToken
 import fs2.Pull
 
-final class GBQFlow[F[_]: Concurrent](
+final class GBQFlow[F[_]: Concurrent: Timer](
     name: String,
     schema: NonEmptyList[GBQSchema],
     idColumn: Option[Column[_]],
@@ -83,18 +86,20 @@ final class GBQFlow[F[_]: Concurrent](
 
   private def tokenF: F[AccessToken] =
     GBQAccessToken.token(config.serviceAccountAuthBytes)
+  
+  implicit def jobEntityDecoder: EntityDecoder[F, GBQJob] = jsonOf[F, GBQJob]
 
   def ingest: Pipe[F, Byte, Unit] = { (bytes: Stream[F, Byte]) =>
 
-    val uploadUri = for {
+    val uploadUriAndJob = for {
       mode <- refMode.get
       jobConfig = formGBQJobConfig(schema, config, name, mode)
       _ <- mkDataset.whenA(mode === WriteMode.Replace)
-      eloc <- mkGbqJob(jobConfig)
-    } yield eloc
+      elocAndJob <- mkGbqJob(jobConfig)
+    } yield elocAndJob
 
     for {
-      _ <- upload(bytes, uploadUri)
+      _ <- upload(bytes, uploadUriAndJob)
       _ <- Stream.eval(refMode.set(WriteMode.Append))
     } yield ()
   }
@@ -184,7 +189,6 @@ final class GBQFlow[F[_]: Concurrent](
       "LOAD")
   }
 
-
   private def mkDataset: F[Either[InitializationError[Json], Unit]] = {
 
     implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQDatasetConfig] =
@@ -218,28 +222,30 @@ final class GBQFlow[F[_]: Concurrent](
     })
   }
 
-  private def mkGbqJob(jCfg: GBQJobConfig): F[Either[InitializationError[Json], Uri]] = {
+  private def mkGbqJob(jCfg: GBQJobConfig): F[Either[InitializationError[Json], (Uri, GBQJob)]] = {
     implicit def jobConfigEntityEncoder: EntityEncoder[F, GBQJobConfig] = jsonEncoderOf[F, GBQJobConfig]
+
 
     val project =
       URLEncoder.encode(jCfg.destinationTable.project, StandardCharsets.UTF_8.toString)
     val jobUrlString =
       s"https://bigquery.googleapis.com/upload/bigquery/v2/projects/${project}/jobs?uploadType=resumable"
 
-    StringToUri.get(jobUrlString).fold(_.asLeft[Uri].pure[F], uri => {
+    StringToUri.get(jobUrlString).fold(_.asLeft[(Uri, GBQJob)].pure[F], uri => {
       val jobReq = credsF map { creds =>
         Request[F](Method.POST,uri)
           .withHeaders(creds)
           .withContentType(`Content-Type`(MediaType.application.json))
           .withEntity(jCfg)
       }
-
       Resource.eval(jobReq).flatMap(client.run).use { resp =>
         resp.status match {
           case Status.Ok => resp.headers match {
             case Location(loc) => 
-              Sync[F].delay(log.debug(s"Successfully initialised job."))
-                .as(loc.uri.asRight[InitializationError[Json]])
+              Sync[F].delay(log.debug(s"Successfully initialised job.")) >>
+              resp
+                .as[GBQJob].tupleLeft(loc.uri)
+                .map(_.asRight[InitializationError[Json]])
           }
           case otherStatus =>  
             resp.attemptAs[String].foldF(
@@ -248,15 +254,71 @@ final class GBQFlow[F[_]: Concurrent](
               .as(DestinationError.invalidConfiguration(
                 (GBQDestinationModule.destinationType, 
                   config.sanitizedJson,
-                  ZNEList(s"Error creating GBQ job: ${resp.status.reason}"))).asLeft[Uri])
-
-            
+                  ZNEList(s"Error creating GBQ job: ${resp.status.reason}"))).asLeft[(Uri, GBQJob)])
         }
       }
     })
   }
 
-  private def upload(bytes: Stream[F, Byte], uploadLocation: F[Either[InitializationError[Json], Uri]]): Stream[F, Unit] = {
+  private def getJob(job: GBQJob): Stream[F, GBQJob] = {
+    val jobUrlString =
+      s"https://bigquery.googleapis.com/bigquery/v2/projects/${job.jobReference.projectId}/jobs/${job.id}"
+
+    val jobReq = credsF map { creds =>
+      Request[F](Method.GET, Uri.unsafeFromString(jobUrlString))
+        .withHeaders(creds)
+        .withContentType(`Content-Type`(MediaType.application.json))
+    }
+
+    Stream
+      .eval(jobReq)
+      .flatMap(req => client.stream(req))
+      .evalMap { resp =>
+        resp.status match {
+          case Status.Ok => resp.as[GBQJob]
+          case _         => ApplicativeError[F, Throwable].raiseError[GBQJob](
+                              new RuntimeException(s"getJobStatus failed: ${resp.status.reason}. Check job manually with jobId: ${job.id}" )
+                            )
+        }
+      }
+  }
+
+  private def checkJobStatus(job: GBQJob, timeOut: FiniteDuration, maxRetries: Int, tries: Int): Stream[F, Unit] = {
+
+    def retry: Stream[F, Unit] =
+      Stream.sleep(timeOut) >> getJob(job).flatMap(newJob => checkJobStatus(newJob, timeOut, maxRetries, tries + 1))
+
+    def success: Stream[F, Unit] = Stream.eval(Sync[F].delay(log.debug("Job completed successfully")))
+
+    def error(message: String): Stream[F, Unit] =
+      Stream.eval(ApplicativeError[F, Throwable].raiseError[Unit](
+            new RuntimeException(s"getJobStatus failed: ${message}")
+          )
+      )
+    
+    def errorsString(errors: List[GBQErrors]): String =
+      s"Job failed with: ${errors.map(e => s"${e.reason}, ${e.message}").foldLeft(" ")(_ |+| _)}"
+
+    if (maxRetries >= tries) {
+      Stream.eval(Sync[F].delay(log.debug(s"getJobStatus stopped after too many retries, check job manually with jobId: ${job.id}")))
+    } else {
+      job.status.state match {
+        case "PENDING" => retry
+        case "RUNNING" => retry
+        case "FAILURE" => job.status.errors match {
+          case None       => error("Job failed with unknown errors")
+          case Some(errs) => error(errorsString(errs))
+        }
+        case "DONE"    => job.status.errorResult match {
+          case None      => success
+          case Some(err) => error(errorsString(job.status.errors.getOrElse(List.empty)))
+        }
+        case "SUCCESS" => success
+      }
+    }
+  }
+
+  private def upload(bytes: Stream[F, Byte], uploadLocation: F[Either[InitializationError[Json], (Uri, GBQJob)]]): Stream[F, Unit] = {
 
     bytes.pull.peek.flatMap {
       case None => 
@@ -266,7 +328,7 @@ final class GBQFlow[F[_]: Concurrent](
           case Left(error) => 
             Pull.raiseError[F](new RuntimeException(s"No Location URL returned from job: $error"))
             
-          case Right(uri) =>
+          case Right((uri, job)) =>
 
             val destReq = Request[F](Method.PUT, uri)
                 .putHeaders(Header("Host", "www.googleapis.com"))
@@ -281,18 +343,15 @@ final class GBQFlow[F[_]: Concurrent](
               }
             }
 
-            uploadStream.pull.echo
-
+            uploadStream.pull.echo >> 
+            checkJobStatus(job, config.timeOut, config.maxRetries, 0).pull.echo
         }
-        
     }.stream
-
-
   }
 }
 
 object GBQFlow {
-  def apply[F[_]: Concurrent: MonadResourceErr](
+  def apply[F[_]: Concurrent: Timer: MonadResourceErr](
       config: GBQConfig,
       client: Client[F],
       args: GBQSinks.Args)
@@ -354,3 +413,4 @@ object GBQFlow {
         case ColumnType.Null => "INTEGER1".validNel
       }
 }
+

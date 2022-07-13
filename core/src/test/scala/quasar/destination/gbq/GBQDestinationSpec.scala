@@ -87,7 +87,7 @@ object GBQDestinationSpec extends EffectfulQSpec[IO] {
       case Left(value) => Json.obj("malformed" := true)
       case Right(value) => value
     }
-    val config = GBQConfig(authCfgJson.as[ServiceAccountConfig].toOption.get, dataset, None)
+    val config = GBQConfig(authCfgJson.as[ServiceAccountConfig].toOption.get, dataset, None, None, None)
     (config, tableName)
   }
 
